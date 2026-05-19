@@ -2,7 +2,7 @@ import cron from 'node-cron';
 import { lt, eq, and, lte, gte, sql } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { redis } from '../lib/redis.js';
-import { sessions, users, lessonContent, dailyPlans, studyEvents, dailySummaries } from '../db/schema.js';
+import { sessions, users, lessonContent, dailyPlans, studyEvents, dailySummaries, teacherPacks, resources } from '../db/schema.js';
 import { generateDailyPlan } from '../services/studyCoach.js';
 import { bundleQueue } from '../lib/queues.js';
 import { minio, bundleBucket } from '../lib/minio.js';
@@ -87,6 +87,37 @@ export function registerCronJobs(): void {
       logger.info('cron:bundle-stale-check done');
     } catch (err) {
       logger.error({ err }, 'cron:bundle-stale-check failed');
+    }
+  });
+
+  // Resource & teacher-pack URL verification (weekly Sunday 4am)
+  cron.schedule('0 4 * * 0', async () => {
+    logger.info('cron:resource-verification starting');
+    try {
+      // Verify teacher pack bundle URLs
+      const packs = await db
+        .select({ id: teacherPacks.id, title: teacherPacks.title, bundleUrl: teacherPacks.bundleUrl })
+        .from(teacherPacks)
+        .where(eq(teacherPacks.approved, true));
+
+      let dead = 0;
+      for (const pack of packs) {
+        if (!pack.bundleUrl) continue;
+        try {
+          const res = await fetch(pack.bundleUrl, { method: 'HEAD', signal: AbortSignal.timeout(8000) });
+          if (!res.ok) {
+            logger.warn({ packId: pack.id, title: pack.title, status: res.status }, 'Teacher pack URL unreachable');
+            dead++;
+          }
+        } catch (err) {
+          logger.warn({ packId: pack.id, title: pack.title, err }, 'Teacher pack URL fetch failed');
+          dead++;
+        }
+      }
+
+      logger.info({ checked: packs.length, dead }, 'cron:resource-verification done');
+    } catch (err) {
+      logger.error({ err }, 'cron:resource-verification failed');
     }
   });
 

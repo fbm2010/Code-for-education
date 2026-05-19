@@ -172,6 +172,35 @@ export async function contentRoutes(fastify: FastifyInstance): Promise<void> {
     },
   );
 
+  // GET /lessons/:id/content/text  — text-only (low-BW alias)
+  fastify.get<{ Params: { id: string }; Querystring: { lang?: string } }>(
+    '/lessons/:id/content/text',
+    async (req, reply) => {
+      const { id } = req.params;
+      const lang   = req.query.lang ?? 'en';
+
+      const content = await db.query.lessonContent.findFirst({
+        where: and(eq(lessonContent.lessonId, id), eq(lessonContent.language, lang), eq(lessonContent.published, true)),
+      }) ?? await db.query.lessonContent.findFirst({
+        where: and(eq(lessonContent.lessonId, id), eq(lessonContent.language, 'en'), eq(lessonContent.published, true)),
+      });
+
+      if (!content) throw Errors.notFound('Lesson content');
+
+      return respond(reply, {
+        lesson_id:  id,
+        language:   content.language,
+        version:    content.version,
+        mode:       'low_bandwidth',
+        body:       content.bodyText ?? '',
+        audio_url:  content.audioUrl,
+        slides_url: content.slidesUrl,
+        size_bytes: content.sizeBytes,
+        checksum:   content.checksum,
+      }, 200, req.id);
+    },
+  );
+
   // GET /lessons/:id/quiz
   fastify.get<{ Params: { id: string }; Querystring: { lang?: string } }>(
     '/lessons/:id/quiz',

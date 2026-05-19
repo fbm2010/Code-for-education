@@ -8,6 +8,8 @@ import rateLimit   from '@fastify/rate-limit';
 import multipart   from '@fastify/multipart';
 import swagger     from '@fastify/swagger';
 import swaggerUi   from '@fastify/swagger-ui';
+import csrf        from '@fastify/csrf-protection';
+import * as Sentry from '@sentry/node';
 import { ZodError } from 'zod';
 
 import { config }  from './config.js';
@@ -18,6 +20,17 @@ import { sql }     from 'drizzle-orm';
 import { ensureBuckets } from './lib/minio.js';
 import { AppError } from './lib/errors.js';
 import { registerBandwidthHook } from './middleware/bandwidth.js';
+
+// Sentry: initialize as early as possible so it captures all errors
+if (config.SENTRY_DSN) {
+  Sentry.init({
+    dsn:               config.SENTRY_DSN,
+    environment:       config.NODE_ENV,
+    tracesSampleRate:  config.NODE_ENV === 'production' ? 0.1 : 1.0,
+    integrations:      [Sentry.httpIntegration()],
+  });
+  logger.info('Sentry initialized');
+}
 
 import { authRoutes }      from './routes/auth.js';
 import { contentRoutes }   from './routes/content.js';
@@ -68,6 +81,16 @@ export async function buildApp(opts: { testing?: boolean } = {}): Promise<Fastif
   // 5. Multipart
   await fastify.register(multipart, { limits: { fileSize: 100 * 1024 * 1024 } });
 
+  // 5b. CSRF protection (double-submit cookie, exempt in test mode)
+  if (!opts.testing) {
+    await fastify.register(csrf, {
+      sessionPlugin: '@fastify/cookie',
+      cookieOpts:    { httpOnly: false, sameSite: 'lax', secure: config.NODE_ENV === 'production' },
+      getUserInfo:   (req) => (req as typeof req & { userId?: string }).userId ?? req.ip,
+      csrfOpts:      { hmacKey: config.SESSION_SECRET, userInfo: true },
+    });
+  }
+
   // 6. Swagger (dev only)
   if (config.NODE_ENV !== 'production') {
     await fastify.register(swagger, {
@@ -106,6 +129,7 @@ export async function buildApp(opts: { testing?: boolean } = {}): Promise<Fastif
       return reply.code(429).send({ error: { code: 'RATE_LIMIT_EXCEEDED', message: 'Too many requests' } });
     }
 
+    if (config.SENTRY_DSN) Sentry.captureException(error);
     logger.error({ err: error, reqId: req.id }, 'Unhandled error');
     return reply.code(500).send({ error: { code: 'INTERNAL_ERROR', message: 'An unexpected error occurred' } });
   });

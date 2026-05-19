@@ -20,7 +20,7 @@ const schema = z.object({
   MINIO_SECRET_KEY:     z.string().default('zerolink_secret'),
   MINIO_BUCKET_MEDIA:   z.string().default('zerolink-media'),
   MINIO_BUCKET_BUNDLES: z.string().default('zerolink-bundles'),
-  MINIO_USE_SSL:        z.coerce.boolean().default(false),
+  MINIO_USE_SSL:        z.preprocess(v => v === 'true' || v === true, z.boolean()).default(false),
 
   CDN_BASE_URL: z.string().default('http://localhost:9000/zerolink-media'),
 
