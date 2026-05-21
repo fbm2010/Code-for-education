@@ -51,7 +51,14 @@ log "Running database migrations..."
 cd "$API_DIR"
 npx tsx src/db/migrate.ts
 
-# ── Step 5: Start API and web app ─────────────────────────────────────────────
+# ── Step 5: Seed the database (skips if already seeded) ───────────────────────
+log "Seeding database..."
+npx tsx src/db/seed.ts
+
+log "Flushing stale Redis cache..."
+docker exec zl-redis redis-cli DEL "cache:categories" > /dev/null
+
+# ── Step 6: Start API and web app ─────────────────────────────────────────────
 log "Starting API on port 3000..."
 cd "$API_DIR"
 npx tsx src/server.ts > /tmp/zerolink-api.log 2>&1 &
