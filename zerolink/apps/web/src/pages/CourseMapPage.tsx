@@ -40,7 +40,8 @@ export function CourseMapPage() {
       const res = await api.get('/courses', {
         params: { categoryId: selectedCategory?.id },
       });
-      return res.data.data;
+      const d = res.data.data;
+      return Array.isArray(d) ? d : (d?.items ?? []);
     },
     enabled: !!selectedCategory,
   });
@@ -168,7 +169,7 @@ export function CourseMapPage() {
                         className="btn-primary flex-1 text-sm py-2"
                         onClick={() => navigate(`/courses/${course.slug}`)}
                       >
-                        Start →
+                        Worksheets →
                       </button>
                       <button
                         className="btn-secondary text-sm py-2 px-3"

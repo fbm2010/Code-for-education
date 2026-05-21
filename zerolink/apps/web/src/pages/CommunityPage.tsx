@@ -17,7 +17,8 @@ export function CommunityPage() {
     queryKey: ['resources', filter],
     queryFn: async () => {
       const res = await api.get('/resources', { params: filter !== 'all' ? { type: filter } : {} });
-      return res.data.data;
+      const d = res.data.data;
+      return Array.isArray(d) ? d : (d?.items ?? []);
     },
   });
 
@@ -25,7 +26,8 @@ export function CommunityPage() {
     queryKey: ['teacherPacks'],
     queryFn: async () => {
       const res = await api.get('/teacher-packs', { params: { approved: true } });
-      return res.data.data;
+      const d = res.data.data;
+      return Array.isArray(d) ? d : (d?.items ?? []);
     },
   });
 
@@ -98,7 +100,7 @@ export function CommunityPage() {
                   </p>
                 )}
                 <div className="flex flex-wrap gap-1 mt-3">
-                  {r.languages.map(l => (
+                  {(r.languages ?? []).map(l => (
                     <span key={l} className="text-xs bg-sky-100 text-sky-700 font-semibold px-2 py-0.5 rounded-full">{l}</span>
                   ))}
                 </div>
@@ -123,7 +125,7 @@ export function CommunityPage() {
                 <h3 className="font-bold text-earth-800 mb-2">{pack.title}</h3>
                 {pack.description && <p className="text-earth-500 text-sm mb-3">{pack.description}</p>}
                 <div className="flex flex-wrap gap-2 mb-4">
-                  {pack.languages.map(l => (
+                  {(pack.languages ?? []).map(l => (
                     <span key={l} className="text-xs bg-earth-100 text-earth-600 font-semibold px-2 py-0.5 rounded-full">{l}</span>
                   ))}
                   {pack.sizeBytes && (

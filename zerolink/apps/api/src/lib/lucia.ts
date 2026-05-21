@@ -7,12 +7,16 @@ import { config } from '../config.js';
 // @ts-expect-error: drizzle-orm 0.30.x / @lucia-auth/adapter-drizzle 1.1.0 version mismatch
 const adapter = new DrizzlePostgreSQLAdapter(db, sessions, users);
 
+const appUrl = new URL(config.APP_URL);
+const apiUrl = new URL(config.API_URL);
+const crossOriginHttpsApp = appUrl.origin !== apiUrl.origin && apiUrl.protocol === 'https:';
+
 export const lucia = new Lucia(adapter as ConstructorParameters<typeof Lucia>[0], {
   sessionCookie: {
     name: 'zerolink_session',
     attributes: {
-      secure:   config.NODE_ENV === 'production',
-      sameSite: 'lax',
+      secure:   config.NODE_ENV === 'production' || crossOriginHttpsApp,
+      sameSite: crossOriginHttpsApp ? 'none' : 'lax',
       path:     '/',
     },
   },

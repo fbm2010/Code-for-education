@@ -27,8 +27,11 @@ const schema = z.object({
   GOOGLE_CLIENT_ID:     z.string().optional(),
   GOOGLE_CLIENT_SECRET: z.string().optional(),
 
-  LIBRETRANSLATE_URL:     z.string().url().default('http://localhost:5000'),
-  LIBRETRANSLATE_API_KEY: z.string().optional(),
+  LOKALISE_API_URL: z.string().url().default('https://api.lokalise.com/api2'),
+  LOKALISE_API_TOKEN: z.string().optional(),
+  LOKALISE_PROJECT_ID: z.string().optional(),
+  LOKALISE_CREATE_MISSING_KEYS: z.coerce.boolean().default(true),
+  LOKALISE_TRANSLATION_RETRIES: z.coerce.number().default(3),
 
   SENTRY_DSN: z.string().optional(),
 

@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import Fastify from 'fastify';
+import { pathToFileURL } from 'node:url';
 import type { FastifyInstance } from 'fastify';
 import compress    from '@fastify/compress';
 import cors        from '@fastify/cors';
@@ -174,4 +175,6 @@ async function main(): Promise<void> {
   }
 }
 
-void main();
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  void main();
+}

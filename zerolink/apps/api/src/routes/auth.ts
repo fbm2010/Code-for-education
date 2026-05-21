@@ -4,7 +4,7 @@ import { eq, and, isNull } from 'drizzle-orm';
 import { hash, verify } from '@node-rs/argon2';
 import { lucia } from '../lib/lucia.js';
 import { db } from '../db/index.js';
-import { users, userPreferences, studyStreaks } from '../db/schema.js';
+import { users, userPreferences, studyStreaks, oauthAccounts } from '../db/schema.js';
 import { authenticate } from '../middleware/authenticate.js';
 import { AppError, Errors } from '../lib/errors.js';
 import { config } from '../config.js';
@@ -36,6 +36,29 @@ const GuestUpgradeBody = z.object({
   displayName: z.string().min(1).max(100).optional(),
 });
 
+const GoogleCallbackQuery = z.object({
+  code: z.string().min(1).optional(),
+  state: z.string().min(1).optional(),
+  error: z.string().optional(),
+});
+
+type GoogleTokenResponse = {
+  access_token?: string;
+  token_type?: string;
+  expires_in?: number;
+  id_token?: string;
+  error?: string;
+  error_description?: string;
+};
+
+type GoogleUserInfo = {
+  sub: string;
+  email?: string;
+  email_verified?: boolean;
+  name?: string;
+  picture?: string;
+};
+
 function respond<T>(reply: FastifyReply, data: T, status = 200, reqId: string) {
   return reply.code(status).send({ data, meta: { request_id: reqId, timestamp: new Date().toISOString() } });
 }
@@ -49,6 +72,122 @@ function randomGuestName(): string {
   return `explorer_${Math.floor(Math.random() * 9000) + 1000}`;
 }
 
+function googleRedirectUri(origin = config.APP_URL): string {
+  return `${origin}/v1/auth/oauth/google/callback`;
+}
+
+function googleStartUri(): string {
+  return `${config.APP_URL}/v1/auth/oauth/google`;
+}
+
+function requestOrigin(req: FastifyRequest): string {
+  const forwardedProto = req.headers['x-forwarded-proto'];
+  const headerProto = Array.isArray(forwardedProto) ? forwardedProto[0] : forwardedProto;
+  const proto = headerProto ?? (/^(localhost|127\.|\[::1\])/.test(req.hostname) ? 'http' : 'https');
+  return `${proto ?? 'https'}://${req.hostname}`;
+}
+
+function loginRedirect(reason?: string): string {
+  const url = new URL('/login', config.APP_URL);
+  if (reason) url.searchParams.set('oauth_error', reason);
+  return url.toString();
+}
+
+function setOauthStateCookie(reply: FastifyReply, state: string): void {
+  reply.header('Set-Cookie', `google_oauth_state=${encodeURIComponent(state)}; HttpOnly; Path=/v1/auth/oauth/google; Max-Age=600; SameSite=Lax`);
+}
+
+function clearOauthStateCookie(): string {
+  return 'google_oauth_state=; HttpOnly; Path=/v1/auth/oauth/google; Max-Age=0; SameSite=Lax';
+}
+
+function readCookie(header: string | undefined, name: string): string | null {
+  if (!header) return null;
+  const cookies = header.split(';').map(part => part.trim());
+  for (const cookie of cookies) {
+    const [key, ...valueParts] = cookie.split('=');
+    if (key === name) return decodeURIComponent(valueParts.join('='));
+  }
+  return null;
+}
+
+function serializeUser(user: typeof users.$inferSelect) {
+  return {
+    id: user.id,
+    username: user.username,
+    email: user.email,
+    displayName: user.displayName,
+    avatarUrl: user.avatarUrl,
+    role: user.isGuest ? 'guest' : user.role,
+    isGuest: user.isGuest,
+    emailVerified: false,
+    createdAt: user.createdAt.toISOString(),
+  };
+}
+
+async function exchangeGoogleCode(code: string): Promise<GoogleTokenResponse> {
+  const body = new URLSearchParams({
+    code,
+    client_id: config.GOOGLE_CLIENT_ID ?? '',
+    client_secret: config.GOOGLE_CLIENT_SECRET ?? '',
+    redirect_uri: googleRedirectUri(),
+    grant_type: 'authorization_code',
+  });
+
+  const res = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body,
+    signal: AbortSignal.timeout(10_000),
+  });
+
+  return await res.json() as GoogleTokenResponse;
+}
+
+async function fetchGoogleUserInfo(accessToken: string): Promise<GoogleUserInfo> {
+  const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    signal: AbortSignal.timeout(10_000),
+  });
+
+  if (!res.ok) throw Errors.unauthorized('Could not read Google profile');
+  return await res.json() as GoogleUserInfo;
+}
+
+async function findOrCreateGoogleUser(profile: GoogleUserInfo): Promise<typeof users.$inferSelect> {
+  const linkedAccount = await db.query.oauthAccounts.findFirst({
+    where: and(eq(oauthAccounts.provider, 'google'), eq(oauthAccounts.providerId, profile.sub)),
+  });
+
+  if (linkedAccount) {
+    const linkedUser = await db.query.users.findFirst({ where: and(eq(users.id, linkedAccount.userId), isNull(users.deletedAt)) });
+    if (linkedUser) return linkedUser;
+  }
+
+  const existingUser = profile.email
+    ? await db.query.users.findFirst({ where: and(eq(users.email, profile.email), isNull(users.deletedAt)) })
+    : null;
+
+  if (existingUser) {
+    await db.insert(oauthAccounts).values({ provider: 'google', providerId: profile.sub, userId: existingUser.id }).onConflictDoNothing();
+    return existingUser;
+  }
+
+  const [createdUser] = await db.insert(users).values({
+    email: profile.email ?? null,
+    displayName: profile.name ?? profile.email?.split('@')[0] ?? 'Google user',
+    avatarUrl: profile.picture ?? null,
+    isGuest: false,
+  }).returning();
+
+  if (!createdUser) throw Errors.internal();
+
+  await createDefaultsForUser(createdUser.id);
+  await db.insert(oauthAccounts).values({ provider: 'google', providerId: profile.sub, userId: createdUser.id }).onConflictDoNothing();
+
+  return createdUser;
+}
+
 export async function authRoutes(fastify: FastifyInstance): Promise<void> {
   const authRateLimit = {
     config: {
@@ -58,6 +197,69 @@ export async function authRoutes(fastify: FastifyInstance): Promise<void> {
       },
     },
   };
+
+  // GET /auth/oauth/google
+  fastify.get('/oauth/google', async (req, reply) => {
+    if (!config.GOOGLE_CLIENT_ID || !config.GOOGLE_CLIENT_SECRET) {
+      return reply.redirect(loginRedirect('google_not_configured'));
+    }
+
+    if (requestOrigin(req) === new URL(config.API_URL).origin) {
+      return reply.redirect(googleStartUri());
+    }
+
+    const state = crypto.randomUUID();
+    const url = new URL('https://accounts.google.com/o/oauth2/v2/auth');
+    url.searchParams.set('client_id', config.GOOGLE_CLIENT_ID);
+    url.searchParams.set('redirect_uri', googleRedirectUri());
+    url.searchParams.set('response_type', 'code');
+    url.searchParams.set('scope', 'openid email profile');
+    url.searchParams.set('state', state);
+    url.searchParams.set('access_type', 'offline');
+    url.searchParams.set('prompt', 'select_account');
+
+    setOauthStateCookie(reply, state);
+    return reply.redirect(url.toString());
+  });
+
+  // GET /auth/oauth/google/callback
+  fastify.get<{ Querystring: z.infer<typeof GoogleCallbackQuery> }>('/oauth/google/callback', async (req, reply) => {
+    const query = GoogleCallbackQuery.safeParse(req.query);
+    if (!query.success) return reply.redirect(loginRedirect('invalid_google_response'));
+    if (query.data.error) return reply.redirect(loginRedirect(query.data.error));
+
+    const expectedState = readCookie(req.headers.cookie, 'google_oauth_state');
+    if (!query.data.code || !query.data.state || !expectedState || query.data.state !== expectedState) {
+      reply.header('Set-Cookie', clearOauthStateCookie());
+      return reply.redirect(loginRedirect('invalid_google_state'));
+    }
+
+    try {
+      const token = await exchangeGoogleCode(query.data.code);
+      if (!token.access_token) {
+        logger.warn({ error: token.error, description: token.error_description }, 'Google token exchange failed');
+        reply.header('Set-Cookie', clearOauthStateCookie());
+        return reply.redirect(loginRedirect('google_token_failed'));
+      }
+
+      const profile = await fetchGoogleUserInfo(token.access_token);
+      if (!profile.sub) {
+        reply.header('Set-Cookie', clearOauthStateCookie());
+        return reply.redirect(loginRedirect('google_profile_failed'));
+      }
+
+      const user = await findOrCreateGoogleUser(profile);
+      const session = await lucia.createSession(user.id, {});
+      const cookie = lucia.createSessionCookie(session.id);
+
+      reply.header('Set-Cookie', [cookie.serialize(), clearOauthStateCookie()]);
+      return reply.redirect(new URL('/dashboard', config.APP_URL).toString());
+    } catch (err) {
+      logger.warn({ err }, 'Google OAuth callback failed');
+      reply.header('Set-Cookie', clearOauthStateCookie());
+      return reply.redirect(loginRedirect('google_signin_failed'));
+    }
+  });
 
   // POST /auth/register
   fastify.post<{ Body: z.infer<typeof RegisterBody> }>(
@@ -95,7 +297,7 @@ export async function authRoutes(fastify: FastifyInstance): Promise<void> {
       const cookie     = lucia.createSessionCookie(session.id);
       reply.header('Set-Cookie', cookie.serialize());
 
-      return respond(reply, { user: { id: user.id, email: user.email, username: user.username, displayName: user.displayName } }, 201, req.id);
+      return respond(reply, { user: serializeUser(user) }, 201, req.id);
     },
   );
 
@@ -124,7 +326,7 @@ export async function authRoutes(fastify: FastifyInstance): Promise<void> {
       const cookie  = lucia.createSessionCookie(session.id);
       reply.header('Set-Cookie', cookie.serialize());
 
-      return respond(reply, { user: { id: user.id, email: user.email, username: user.username, displayName: user.displayName } }, 200, req.id);
+      return respond(reply, { user: serializeUser(user) }, 200, req.id);
     },
   );
 
@@ -169,7 +371,7 @@ export async function authRoutes(fastify: FastifyInstance): Promise<void> {
     const cookie  = lucia.createSessionCookie(session.id);
     reply.header('Set-Cookie', cookie.serialize());
 
-    return respond(reply, { user: { id: user.id, username: user.username, isGuest: true } }, 201, req.id);
+    return respond(reply, { user: serializeUser(user) }, 201, req.id);
   });
 
   // POST /auth/guest/upgrade
@@ -196,7 +398,8 @@ export async function authRoutes(fastify: FastifyInstance): Promise<void> {
         .where(eq(users.id, authReq.user.id))
         .returning();
 
-      return respond(reply, { user: { id: updated?.id, email: updated?.email } }, 200, req.id);
+      if (!updated) throw Errors.internal();
+      return respond(reply, { user: serializeUser(updated) }, 200, req.id);
     },
   );
 }

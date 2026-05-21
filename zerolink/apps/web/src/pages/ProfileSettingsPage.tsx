@@ -6,7 +6,7 @@ import { api } from '../lib/api';
 const LANGS = [
   { code: 'en', label: 'English' }, { code: 'sw', label: 'Kiswahili' },
   { code: 'fr', label: 'Français' }, { code: 'ar', label: 'العربية' },
-  { code: 'hi', label: 'हिन्दी' }, { code: 'pt', label: 'Português' },
+  { code: 'hi', label: 'हिन्दी' }, { code: 'es', label: 'Español' }, { code: 'pt', label: 'Português' },
   { code: 'ha', label: 'Hausa' }, { code: 'am', label: 'አማርኛ' },
 ];
 

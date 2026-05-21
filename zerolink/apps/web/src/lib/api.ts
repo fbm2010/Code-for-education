@@ -2,9 +2,10 @@ import axios from 'axios';
 import { useAuthStore } from '../stores/authStore';
 import { usePrefsStore } from '../stores/prefsStore';
 import { detectBandwidth } from './connectivity';
+import { getApiBaseUrl } from './apiUrl';
 
 export const api = axios.create({
-  baseURL: `${import.meta.env.VITE_API_URL ?? ''}/v1`,
+  baseURL: `${getApiBaseUrl()}/v1`,
   withCredentials: true,
 });
 

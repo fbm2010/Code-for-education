@@ -16,6 +16,17 @@ const TECHNIQUES = [
   { key: 'interleaving', icon: '🔀', name: 'Interleaving', desc: 'Mix subjects in one session to build stronger connections between ideas.' },
 ];
 
+const LESSON_LANGUAGES = [
+  { code: 'en', label: 'English' },
+  { code: 'sw', label: 'Kiswahili' },
+  { code: 'fr', label: 'Français' },
+  { code: 'ar', label: 'العربية' },
+  { code: 'hi', label: 'हिन्दी' },
+  { code: 'es', label: 'Español' },
+  { code: 'pt', label: 'Português' },
+  { code: 'ha', label: 'Hausa' },
+];
+
 export function LessonPage() {
   const { id = '' } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -29,6 +40,10 @@ export function LessonPage() {
 
   const forceLowBw = prefs.lowBandwidthDefault || bandwidth === 'low';
   const { data: content, isLoading: contentLoading } = useLessonContent(id, lang);
+
+  useEffect(() => {
+    setLang(prefs.primaryLanguage);
+  }, [prefs.primaryLanguage]);
 
   // Track scroll progress
   useEffect(() => {
@@ -134,8 +149,8 @@ export function LessonPage() {
               className="input w-auto text-sm py-1.5 shrink-0"
               aria-label="Lesson language"
             >
-              {Object.keys(lesson.title).map(l => (
-                <option key={l} value={l}>{l.toUpperCase()}</option>
+              {LESSON_LANGUAGES.map(l => (
+                <option key={l.code} value={l.code}>{l.label}</option>
               ))}
             </select>
           </div>

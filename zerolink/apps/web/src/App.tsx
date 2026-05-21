@@ -5,6 +5,7 @@ import { usePrefsStore } from './stores/prefsStore';
 import { AppLayout } from './components/layout/AppLayout';
 import { ProtectedRoute, PublicOnlyRoute } from './components/layout/ProtectedRoute';
 import { LanternLoader } from './components/ui/LanternLoader';
+import { PageTranslator } from './components/i18n/PageTranslator';
 
 const LandingPage         = lazy(() => import('./pages/LandingPage').then(m => ({ default: m.LandingPage })));
 const LoginPage           = lazy(() => import('./pages/auth/LoginPage').then(m => ({ default: m.LoginPage })));
@@ -14,6 +15,7 @@ const ResetPasswordPage   = lazy(() => import('./pages/auth/ResetPasswordPage').
 const OnboardingPage      = lazy(() => import('./pages/auth/OnboardingPage').then(m => ({ default: m.OnboardingPage })));
 const DashboardPage       = lazy(() => import('./pages/DashboardPage').then(m => ({ default: m.DashboardPage })));
 const CourseMapPage       = lazy(() => import('./pages/CourseMapPage').then(m => ({ default: m.CourseMapPage })));
+const CourseWorksheetsPage = lazy(() => import('./pages/CourseWorksheetsPage').then(m => ({ default: m.CourseWorksheetsPage })));
 const LessonPage          = lazy(() => import('./pages/LessonPage').then(m => ({ default: m.LessonPage })));
 const QuizPage            = lazy(() => import('./pages/QuizPage').then(m => ({ default: m.QuizPage })));
 const StudyCoachPage      = lazy(() => import('./pages/StudyCoachPage').then(m => ({ default: m.StudyCoachPage })));
@@ -32,6 +34,7 @@ export function App() {
 
   return (
     <Suspense fallback={<LanternLoader />}>
+      <PageTranslator />
       <Routes>
         <Route path="/" element={<LandingPage />} />
 
@@ -50,6 +53,8 @@ export function App() {
           <Route element={<AppLayout />}>
             <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/map" element={<CourseMapPage />} />
+            <Route path="/courses/:slug" element={<CourseWorksheetsPage />} />
+            <Route path="/worksheets" element={<CourseWorksheetsPage />} />
             <Route path="/coach" element={<StudyCoachPage />} />
             <Route path="/village" element={<CommunityPage />} />
             <Route path="/profile/settings" element={<ProfileSettingsPage />} />

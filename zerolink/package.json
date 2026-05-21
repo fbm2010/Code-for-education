@@ -2,6 +2,7 @@
   "name": "zerolink",
   "version": "1.0.0",
   "private": true,
+  "packageManager": "npm@10.0.0",
   "workspaces": [
     "apps/*",
     "packages/*"
@@ -15,6 +16,7 @@
     "db:seed": "npm run db:seed --workspace=apps/api"
   },
   "devDependencies": {
+    "playwright": "^1.60.0",
     "turbo": "^2.0.0",
     "typescript": "^5.4.5"
   },

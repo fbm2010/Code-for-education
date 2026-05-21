@@ -15,12 +15,98 @@ import { redis } from '../lib/redis.js';
 import { presignGet, bundleBucket } from '../lib/minio.js';
 import { minio } from '../lib/minio.js';
 import { config } from '../config.js';
+import { translateText, translateTexts } from '../services/translationService.js';
 
 function respond<T>(reply: FastifyReply, data: T, status = 200, reqId: string) {
   return reply.code(status).send({ data, meta: { request_id: reqId, timestamp: new Date().toISOString() } });
 }
 
+const TranslateBody = z.object({
+  text: z.string().min(1).max(20_000),
+  targetLang: z.string().min(2).max(12),
+  sourceLang: z.string().min(2).max(12).default('en'),
+  format: z.enum(['text', 'html']).default('text'),
+});
+
+const TranslateBatchBody = z.object({
+  texts: z.array(z.string().min(1).max(5_000)).min(1).max(80),
+  targetLang: z.string().min(2).max(12),
+  sourceLang: z.string().min(2).max(12).default('en'),
+  format: z.enum(['text', 'html']).default('text'),
+});
+
+async function buildLessonContentPayload(content: typeof lessonContent.$inferSelect, requestedLang: string, lowBandwidth: boolean) {
+  const shouldTranslate = requestedLang !== content.language && content.language === 'en';
+  const bodyText = shouldTranslate && content.bodyText
+    ? await translateText(content.bodyText, requestedLang, 'en', 'text')
+    : content.bodyText;
+  const bodyHtml = shouldTranslate && content.bodyHtml && !lowBandwidth
+    ? await translateText(content.bodyHtml, requestedLang, 'en', 'html')
+    : content.bodyHtml;
+
+  if (lowBandwidth) {
+    return {
+      lesson_id: content.lessonId,
+      lessonId: content.lessonId,
+      language: shouldTranslate ? requestedLang : content.language,
+      source_language: content.language,
+      sourceLanguage: content.language,
+      auto_translated: shouldTranslate,
+      autoTranslated: shouldTranslate,
+      version: content.version,
+      mode: 'low_bandwidth',
+      body: bodyText ?? '',
+      body_text: bodyText ?? '',
+      bodyText: bodyText ?? '',
+      audio_url: content.audioUrl,
+      audioUrl: content.audioUrl,
+      slides_url: content.slidesUrl,
+      slidesUrl: content.slidesUrl,
+      size_bytes: content.sizeBytes,
+      sizeBytes: content.sizeBytes,
+      checksum: content.checksum,
+    };
+  }
+
+  return {
+    lesson_id: content.lessonId,
+    lessonId: content.lessonId,
+    language: shouldTranslate ? requestedLang : content.language,
+    source_language: content.language,
+    sourceLanguage: content.language,
+    auto_translated: shouldTranslate,
+    autoTranslated: shouldTranslate,
+    version: content.version,
+    mode: 'full',
+    body_html: bodyHtml,
+    bodyHtml,
+    body_text: bodyText,
+    bodyText,
+    audio_url: content.audioUrl,
+    audioUrl: content.audioUrl,
+    slides_url: content.slidesUrl,
+    slidesUrl: content.slidesUrl,
+    size_bytes: content.sizeBytes,
+    sizeBytes: content.sizeBytes,
+    checksum: content.checksum,
+  };
+}
+
 export async function contentRoutes(fastify: FastifyInstance): Promise<void> {
+  // POST /translate — generic text translation for UI strings and content fragments
+  fastify.post<{ Body: z.infer<typeof TranslateBody> }>('/translate', async (req, reply) => {
+    const body = TranslateBody.parse(req.body);
+    const translatedText = await translateText(body.text, body.targetLang, body.sourceLang, body.format);
+    return respond(reply, { text: translatedText }, 200, req.id);
+  });
+
+  // POST /translate/batch — translates visible page text in a single request
+  fastify.post<{ Body: z.infer<typeof TranslateBatchBody> }>('/translate/batch', async (req, reply) => {
+    const body = TranslateBatchBody.parse(req.body);
+    const translated = await translateTexts(body.texts, body.targetLang, body.sourceLang, body.format);
+    return respond(reply, { texts: translated }, 200, req.id);
+  });
+
   // GET /categories
   fastify.get('/categories', async (req, reply) => {
     const data = await getOrSet('cache:categories', 86400, async () => {
@@ -159,16 +245,33 @@ export async function contentRoutes(fastify: FastifyInstance): Promise<void> {
 
         if (!content) return null;
 
-        if (bw === 'low') {
-          return { body_text: content.bodyText, audio_url: content.audioUrl, slides_url: content.slidesUrl };
-        }
+        if (bw === 'low') return buildLessonContentPayload(content, lang, true);
 
         const media = await db.select().from(mediaAssets).where(eq(mediaAssets.lessonId, id));
-        return { body_html: content.bodyHtml, media_assets: media, language: content.language, version: content.version };
+        return { ...(await buildLessonContentPayload(content, lang, false)), media_assets: media, mediaAssets: media };
       });
 
       if (!data) throw Errors.notFound('Lesson content');
       return respond(reply, data, 200, req.id);
+    },
+  );
+
+  // GET /lessons/:id/content/text — text-only low-bandwidth alias
+  fastify.get<{ Params: { id: string }; Querystring: { lang?: string } }>(
+    '/lessons/:id/content/text',
+    async (req, reply) => {
+      const { id } = req.params;
+      const lang = req.query.lang ?? 'en';
+
+      const content = await db.query.lessonContent.findFirst({
+        where: and(eq(lessonContent.lessonId, id), eq(lessonContent.language, lang), eq(lessonContent.published, true)),
+      }) ?? await db.query.lessonContent.findFirst({
+        where: and(eq(lessonContent.lessonId, id), eq(lessonContent.language, 'en'), eq(lessonContent.published, true)),
+      });
+
+      if (!content) throw Errors.notFound('Lesson content');
+
+      return respond(reply, await buildLessonContentPayload(content, lang, true), 200, req.id);
     },
   );
 
