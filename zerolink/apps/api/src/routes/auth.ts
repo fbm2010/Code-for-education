@@ -74,20 +74,10 @@ function randomGuestName(): string {
   return `explorer_${Math.floor(Math.random() * 9000) + 1000}`;
 }
 
-function googleRedirectUri(origin = config.APP_URL): string {
-  return `${origin}/v1/auth/oauth/google/callback`;
+function googleRedirectUri(): string {
+  return `${config.API_URL}/v1/auth/oauth/google/callback`;
 }
 
-function googleStartUri(): string {
-  return `${config.APP_URL}/v1/auth/oauth/google`;
-}
-
-function requestOrigin(req: FastifyRequest): string {
-  const forwardedProto = req.headers['x-forwarded-proto'];
-  const headerProto = Array.isArray(forwardedProto) ? forwardedProto[0] : forwardedProto;
-  const proto = headerProto ?? (/^(localhost|127\.|\[::1\])/.test(req.hostname) ? 'http' : 'https');
-  return `${proto ?? 'https'}://${req.hostname}`;
-}
 
 function loginRedirect(reason?: string): string {
   const url = new URL('/login', config.APP_URL);
@@ -225,13 +215,9 @@ export async function authRoutes(fastify: FastifyInstance): Promise<void> {
   };
 
   // GET /auth/oauth/google
-  fastify.get('/oauth/google', async (req, reply) => {
+  fastify.get('/oauth/google', async (_req, reply) => {
     if (!config.GOOGLE_CLIENT_ID || !config.GOOGLE_CLIENT_SECRET) {
       return reply.redirect(loginRedirect('google_not_configured'));
-    }
-
-    if (requestOrigin(req) === new URL(config.API_URL).origin) {
-      return reply.redirect(googleStartUri());
     }
 
     const state = crypto.randomUUID();
