@@ -4,14 +4,25 @@ ZeroLink is a React + Fastify monorepo that delivers an offline-capable, multili
 
 ---
 
-## Live App (GitHub Codespaces)
+## Accessing the App (GitHub Codespaces)
 
-| Service | URL |
-|---|---|
-| Web App | https://legendary-barnacle-qvqrj479pj59f4997-5174.app.github.dev |
-| API | https://legendary-barnacle-qvqrj479pj59f4997-3000.app.github.dev |
-| API Health | https://legendary-barnacle-qvqrj479pj59f4997-3000.app.github.dev/health |
-| MailHog (email testing) | https://legendary-barnacle-qvqrj479pj59f4997-8026.app.github.dev |
+Every person who opens this repo in GitHub Codespaces gets their own unique Codespace name, so the URLs are different for everyone. Your URLs follow this pattern:
+
+```
+https://<your-codespace-name>-5174.app.github.dev   ← Web App
+https://<your-codespace-name>-3000.app.github.dev   ← API
+https://<your-codespace-name>-8026.app.github.dev   ← MailHog
+```
+
+**To find your Codespace name**, run this in the terminal:
+
+```bash
+echo $CODESPACE_NAME
+```
+
+Or just run `./start.sh` — it automatically detects your Codespace name and prints the correct URLs at the end.
+
+> Running locally instead of Codespaces? The app is available at `http://localhost:5174`.
 
 ---
 

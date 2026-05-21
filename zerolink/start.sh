@@ -14,6 +14,18 @@ log()  { echo -e "${GREEN}[start]${NC} $1"; }
 warn() { echo -e "${YELLOW}[warn]${NC}  $1"; }
 die()  { echo -e "${RED}[error]${NC} $1"; exit 1; }
 
+# ── Resolve public URLs (works on any Codespace or localhost) ─────────────────
+DOMAIN="${GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN:-}"
+if [ -n "$CODESPACE_NAME" ] && [ -n "$DOMAIN" ]; then
+  WEB_URL="https://${CODESPACE_NAME}-5174.${DOMAIN}"
+  API_URL="https://${CODESPACE_NAME}-3000.${DOMAIN}"
+  MAIL_URL="https://${CODESPACE_NAME}-8026.${DOMAIN}"
+else
+  WEB_URL="http://localhost:5174"
+  API_URL="http://localhost:3000"
+  MAIL_URL="http://localhost:8026"
+fi
+
 # ── Step 1: Start infrastructure ──────────────────────────────────────────────
 log "Starting Docker infrastructure (postgres, redis, minio, mailhog)..."
 cd "$ROOT"
@@ -31,15 +43,21 @@ until docker exec zl-redis redis-cli ping 2>/dev/null | grep -q PONG; do
 done
 log "Redis is ready."
 
-# ── Step 2: Ensure .env exists ────────────────────────────────────────────────
+# ── Step 2: Ensure .env exists and has correct values ─────────────────────────
 if [ ! -f "$API_DIR/.env" ]; then
-  warn ".env not found — copying from .env.example"
+  warn ".env not found — creating from .env.example"
   cp "$API_DIR/.env.example" "$API_DIR/.env"
-  sed -i 's|postgresql://zerolink:zerolink_dev@localhost:5432|postgresql://zerolink:zerolink@localhost:5433|' "$API_DIR/.env"
-  sed -i 's|redis://localhost:6379|redis://localhost:6380|' "$API_DIR/.env"
-  sed -i 's|MINIO_PORT=9000|MINIO_PORT=9002|' "$API_DIR/.env"
-  warn ".env created — review $API_DIR/.env before going to production."
 fi
+
+# Always fix port mismatches regardless of how .env was created
+sed -i 's|postgresql://zerolink:zerolink_dev@localhost:5432|postgresql://zerolink:zerolink@localhost:5433|' "$API_DIR/.env"
+sed -i 's|postgresql://zerolink:zerolink@localhost:5432|postgresql://zerolink:zerolink@localhost:5433|' "$API_DIR/.env"
+sed -i 's|REDIS_URL=redis://localhost:6379|REDIS_URL=redis://localhost:6380|' "$API_DIR/.env"
+sed -i 's|MINIO_PORT=9000|MINIO_PORT=9002|' "$API_DIR/.env"
+
+# Update APP_URL and API_URL to match this Codespace (or localhost)
+sed -i "s|^APP_URL=.*|APP_URL=${WEB_URL}|" "$API_DIR/.env"
+sed -i "s|^API_URL=.*|API_URL=${API_URL}|" "$API_DIR/.env"
 
 # ── Step 3: Install dependencies ──────────────────────────────────────────────
 log "Installing dependencies..."
@@ -75,7 +93,7 @@ done
 if ! curl -s http://localhost:3000/health | grep -q '"status":"ok"' 2>/dev/null; then
   die "API failed to start. Check /tmp/zerolink-api.log"
 fi
-log "API is ready → http://localhost:3000"
+log "API is ready."
 
 log "Starting web app on port 5174..."
 cd "$WEB_DIR"
@@ -95,9 +113,9 @@ echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━
 echo -e "${GREEN}  ZeroLink is running!${NC}"
 echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 echo ""
-echo -e "  Web App  →  https://legendary-barnacle-qvqrj479pj59f4997-5174.app.github.dev"
-echo -e "  API      →  https://legendary-barnacle-qvqrj479pj59f4997-3000.app.github.dev"
-echo -e "  MailHog  →  https://legendary-barnacle-qvqrj479pj59f4997-8026.app.github.dev"
+echo -e "  Web App  →  ${WEB_URL}"
+echo -e "  API      →  ${API_URL}"
+echo -e "  MailHog  →  ${MAIL_URL}"
 echo ""
 echo -e "  Logs: /tmp/zerolink-api.log  |  /tmp/zerolink-web.log"
 echo -e "  Stop: kill $API_PID $WEB_PID  (or Ctrl+C)"
