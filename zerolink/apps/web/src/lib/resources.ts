@@ -40,7 +40,7 @@ export const RESOURCES: Resource[] = [
     id: 'math-worksheets-land',
     title: 'Math Worksheets Land',
     description: 'Thousands of free printable worksheets aligned to curriculum standards.',
-    url: 'https://www.mathworksheetstland.com',
+    url: 'https://www.mathworksheetsland.com',
     category: 'math', language: 'en', offline: true, free: true, format: 'printable',
   },
   {
