@@ -1,52 +1,18 @@
 import { useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { Download, FileText, Filter, Printer } from 'lucide-react';
+import { Download, FileText, Filter, Printer, PlusCircle } from 'lucide-react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { usePrefsStore } from '../stores/prefsStore';
+import { api } from '../lib/api';
+import { WORKSHEETS, TOPICS, type Worksheet } from '../lib/worksheets';
 
-type Worksheet = {
-  id: string;
-  courseSlug: string;
-  topic: 'math' | 'science' | 'language' | 'geography' | 'arts' | 'technology';
-  title: string;
-  level: string;
-  minutes: number;
-  objectives: string[];
-  tasks: string[];
-  reflection: string;
+const COPY: Record<string, { heading: string; subtitle: string; download: string; print: string; objectives: string; tasks: string; reflection: string; back: string; empty: string; addPlan: string; added: string }> = {
+  en: { heading: 'Course Worksheets', subtitle: 'Pick a topic button, read the worksheet online, or click any worksheet to download it as a PDF.', download: 'Download PDF', print: 'Print', objectives: 'Learning goals', tasks: 'Practice trail', reflection: 'Reflection', back: 'Back to Map', empty: 'No worksheets in this category yet.', addPlan: '+ Add to My Plan', added: 'Added!' },
+  sw: { heading: 'Karatasi za Mazoezi', subtitle: 'Chagua mada, soma mtandaoni, au bofya karatasi kupakua PDF.', download: 'Pakua PDF', print: 'Chapisha', objectives: 'Malengo', tasks: 'Mazoezi', reflection: 'Tafakari', back: 'Rudi Ramani', empty: 'Hakuna karatasi kwenye kundi hili bado.', addPlan: '+ Ongeza Mpangoni', added: 'Imeongezwa!' },
+  fr: { heading: 'Fiches d\'exercices', subtitle: 'Choisis un sujet, lis en ligne ou clique sur une fiche pour télécharger le PDF.', download: 'Télécharger PDF', print: 'Imprimer', objectives: 'Objectifs', tasks: 'Pratique', reflection: 'Réflexion', back: 'Retour à la carte', empty: 'Aucune fiche dans cette catégorie.', addPlan: '+ Ajouter au plan', added: 'Ajouté!' },
+  ar: { heading: 'أوراق العمل', subtitle: 'اختر موضوعًا، اقرأ على الموقع، أو اضغط لتنزيل ملف PDF.', download: 'تنزيل PDF', print: 'طباعة', objectives: 'الأهداف', tasks: 'التدريب', reflection: 'التأمل', back: 'العودة إلى الخريطة', empty: 'لا توجد أوراق عمل هنا بعد.', addPlan: '+ أضف إلى خطتي', added: 'تمت الإضافة!' },
+  hi: { heading: 'कार्यपत्रक', subtitle: 'विषय चुनें, वेबसाइट पर पढ़ें, या PDF डाउनलोड करने के लिए क्लिक करें।', download: 'PDF डाउनलोड', print: 'प्रिंट', objectives: 'लक्ष्य', tasks: 'अभ्यास', reflection: 'चिंतन', back: 'मानचित्र पर लौटें', empty: 'इस श्रेणी में अभी कार्यपत्रक नहीं हैं।', addPlan: '+ योजना में जोड़ें', added: 'जोड़ा गया!' },
 };
-
-const TOPICS = [
-  { key: 'all', label: 'All Worksheets', icon: '🧭' },
-  { key: 'math', label: 'Math', icon: '📐' },
-  { key: 'science', label: 'Science', icon: '🔬' },
-  { key: 'language', label: 'Language', icon: '📚' },
-  { key: 'geography', label: 'Geography', icon: '🌍' },
-  { key: 'arts', label: 'Arts', icon: '🎨' },
-  { key: 'technology', label: 'Technology', icon: '💻' },
-] as const;
-
-const COPY: Record<string, { heading: string; subtitle: string; download: string; print: string; objectives: string; tasks: string; reflection: string; back: string; empty: string }> = {
-  en: { heading: 'Course Worksheets', subtitle: 'Pick a topic button, read the worksheet online, or click any worksheet to download it as a PDF.', download: 'Download PDF', print: 'Print', objectives: 'Learning goals', tasks: 'Practice trail', reflection: 'Reflection', back: 'Back to Map', empty: 'No worksheets in this category yet.' },
-  sw: { heading: 'Karatasi za Mazoezi', subtitle: 'Chagua mada, soma mtandaoni, au bofya karatasi kupakua PDF.', download: 'Pakua PDF', print: 'Chapisha', objectives: 'Malengo', tasks: 'Mazoezi', reflection: 'Tafakari', back: 'Rudi Ramani', empty: 'Hakuna karatasi kwenye kundi hili bado.' },
-  fr: { heading: 'Fiches d’exercices', subtitle: 'Choisis un sujet, lis en ligne ou clique sur une fiche pour télécharger le PDF.', download: 'Télécharger PDF', print: 'Imprimer', objectives: 'Objectifs', tasks: 'Pratique', reflection: 'Réflexion', back: 'Retour à la carte', empty: 'Aucune fiche dans cette catégorie.' },
-  ar: { heading: 'أوراق العمل', subtitle: 'اختر موضوعًا، اقرأ على الموقع، أو اضغط لتنزيل ملف PDF.', download: 'تنزيل PDF', print: 'طباعة', objectives: 'الأهداف', tasks: 'التدريب', reflection: 'التأمل', back: 'العودة إلى الخريطة', empty: 'لا توجد أوراق عمل هنا بعد.' },
-  hi: { heading: 'कार्यपत्रक', subtitle: 'विषय चुनें, वेबसाइट पर पढ़ें, या PDF डाउनलोड करने के लिए क्लिक करें।', download: 'PDF डाउनलोड', print: 'प्रिंट', objectives: 'लक्ष्य', tasks: 'अभ्यास', reflection: 'चिंतन', back: 'मानचित्र पर लौटें', empty: 'इस श्रेणी में अभी कार्यपत्रक नहीं हैं।' },
-  es: { heading: 'Hojas de trabajo', subtitle: 'Elige un tema, lee en línea o haz clic para descargar el PDF.', download: 'Descargar PDF', print: 'Imprimir', objectives: 'Objetivos', tasks: 'Práctica', reflection: 'Reflexión', back: 'Volver al mapa', empty: 'Aún no hay hojas en esta categoría.' },
-  pt: { heading: 'Fichas de atividades', subtitle: 'Escolha um tema, leia online ou clique para baixar o PDF.', download: 'Baixar PDF', print: 'Imprimir', objectives: 'Objetivos', tasks: 'Prática', reflection: 'Reflexão', back: 'Voltar ao mapa', empty: 'Ainda não há fichas nesta categoria.' },
-  ha: { heading: 'Takardun Aiki', subtitle: 'Zaɓi batu, karanta a shafi, ko danna don sauke PDF.', download: 'Sauke PDF', print: 'Buga', objectives: 'Manufofi', tasks: 'Aiki', reflection: 'Tunani', back: 'Koma Taswira', empty: 'Babu takardu a wannan rukuni tukuna.' },
-};
-
-const WORKSHEETS: Worksheet[] = [
-  { id: 'math-number-market', courseSlug: 'foundations-of-math', topic: 'math', title: 'Number Market: Addition & Subtraction', level: 'Beginner', minutes: 20, objectives: ['Add and subtract within 20', 'Explain your strategy using words or drawings'], tasks: ['A mango costs 7 coins and a banana costs 5 coins. How many coins altogether?', 'You have 18 beans. You plant 6. How many are left?', 'Write your own market word problem and solve it.'], reflection: 'Which strategy helped most: counting on, drawing, or using objects?' },
-  { id: 'math-fraction-cooking', courseSlug: 'foundations-of-math', topic: 'math', title: 'Cooking Fractions', level: 'Intermediate', minutes: 25, objectives: ['Recognize halves, thirds, and quarters', 'Compare simple fractions'], tasks: ['Draw a flatbread split into 2 equal pieces. Shade 1/2.', 'Which is larger: 1/3 or 1/4? Explain with a drawing.', 'A recipe uses 3/4 cup of water. Mark it on a cup sketch.'], reflection: 'Where do you use fractions at home?' },
-  { id: 'science-water-cycle', courseSlug: 'earth-and-water-science', topic: 'science', title: 'Water Cycle Field Notes', level: 'Beginner', minutes: 25, objectives: ['Name evaporation, condensation, and precipitation', 'Connect weather observations to the water cycle'], tasks: ['Sketch clouds and arrows showing water moving up and down.', 'Observe the sky for 5 minutes. What clues show rain may come?', 'Put these in order: cloud forms, rain falls, puddle dries.'], reflection: 'How does rain support your community?' },
-  { id: 'science-plant-detective', courseSlug: 'living-world', topic: 'science', title: 'Plant Detective', level: 'Beginner', minutes: 20, objectives: ['Identify roots, stems, leaves, flowers', 'Describe what plants need to grow'], tasks: ['Find a safe plant to observe. Draw and label four parts.', 'List three things this plant needs.', 'Predict what happens if the plant gets no sunlight for a week.'], reflection: 'What plants are important where you live?' },
-  { id: 'language-story-map', courseSlug: 'english-beginners', topic: 'language', title: 'Story Map Builder', level: 'Beginner', minutes: 30, objectives: ['Identify character, setting, problem, and solution', 'Write a short paragraph from a plan'], tasks: ['Choose a character from your community.', 'Describe where the story happens using three details.', 'Write the problem and solution in two complete sentences.'], reflection: 'What makes a story easy to remember?' },
-  { id: 'language-vocab-trail', courseSlug: 'swahili-basics', topic: 'language', title: 'Vocabulary Trail', level: 'Beginner', minutes: 15, objectives: ['Practice five new words', 'Use each word in context'], tasks: ['Pick five useful words from today’s lesson.', 'Draw a small icon for each word.', 'Write one sentence using each word.'], reflection: 'Which word will you use today?' },
-  { id: 'geo-map-my-route', courseSlug: 'maps-and-places', topic: 'geography', title: 'Map My Route', level: 'Beginner', minutes: 25, objectives: ['Use symbols and directions', 'Create a simple route map'], tasks: ['Draw your route from home to a learning place.', 'Add a legend with at least four symbols.', 'Write directions using north, south, east, or west.'], reflection: 'What landmark helps you avoid getting lost?' },
-  { id: 'arts-patterns', courseSlug: 'arts-and-culture', topic: 'arts', title: 'Patterns Around Us', level: 'Beginner', minutes: 20, objectives: ['Recognize repeating patterns', 'Create a pattern inspired by local art'], tasks: ['Find or imagine a pattern with two repeating shapes.', 'Create an ABAB or AABB pattern border.', 'Explain what colors or shapes you chose and why.'], reflection: 'How can art tell a community story?' },
-  { id: 'tech-safe-password', courseSlug: 'technology-frontier', topic: 'technology', title: 'Strong Password Workshop', level: 'Beginner', minutes: 20, objectives: ['Explain why passwords matter', 'Create a memorable strong password pattern'], tasks: ['List three things a password should not include.', 'Build a practice password from a phrase, numbers, and symbols.', 'Write two safety rules for shared devices.'], reflection: 'How can you keep an account safe without writing the password publicly?' },
-];
 
 function escapePdfText(value: string) {
   return value.replace(/[\\()]/g, match => `\\${match}`);
@@ -58,60 +24,97 @@ function wrapText(text: string, width = 86) {
   let line = '';
   for (const word of words) {
     const next = line ? `${line} ${word}` : word;
-    if (next.length > width) {
-      if (line) lines.push(line);
-      line = word;
-    } else {
-      line = next;
-    }
+    if (next.length > width) { if (line) lines.push(line); line = word; }
+    else { line = next; }
   }
   if (line) lines.push(line);
   return lines;
 }
 
-function buildWorksheetPdf(worksheet: Worksheet, labels: typeof COPY.en) {
-  const lines = [
-    `ZeroLink Worksheet: ${worksheet.title}`,
-    `Topic: ${worksheet.topic} | Level: ${worksheet.level} | Time: ${worksheet.minutes} minutes`,
+export function buildWorksheetPdf(worksheet: Worksheet, labels: { objectives: string; tasks: string; reflection: string }) {
+  // Header color block (earth-green rgb 0.18 0.42 0.31)
+  const titleLines = wrapText(worksheet.title, 50);
+  const titleText = titleLines.map(l => `(${escapePdfText(l)}) Tj T*`).join('\n');
+
+  const bodyLines: string[] = [
     '',
-    labels.objectives,
+    `${labels.objectives.toUpperCase()}`,
     ...worksheet.objectives.map((item, i) => `${i + 1}. ${item}`),
     '',
-    labels.tasks,
+    `${labels.tasks.toUpperCase()}`,
     ...worksheet.tasks.map((item, i) => `${i + 1}. ${item}`),
     '',
-    `${labels.reflection}: ${worksheet.reflection}`,
+    `${labels.reflection.toUpperCase()}`,
+    worksheet.reflection,
   ].flatMap(line => wrapText(line));
 
-  const content = [
-    'BT',
-    '/F1 12 Tf',
-    '50 770 Td',
-    '16 TL',
-    ...lines.slice(0, 44).map((line, index) => `${index === 0 ? '/F1 16 Tf ' : ''}(${escapePdfText(line)}) Tj T*${index === 0 ? ' /F1 12 Tf' : ''}`),
+  // Build content stream
+  const parts: string[] = ['BT'];
+
+  // Colored header band (rectangle filled with brand green)
+  const headerStream = `0.18 0.42 0.31 rg\n0 745 612 47 re\nf\n1 1 1 rg`;
+
+  // Title in header
+  parts.push('/F1 16 Tf', '50 759 Td', '16 TL', '1 1 1 rg');
+  parts.push(titleText.replace(/T\*$/, ''));
+  parts.push('ET');
+
+  // Meta bar (topic | level | time)
+  const metaStream = [
+    'BT', '0.4 0.4 0.4 rg', '/F1 9 Tf', '50 735 Td',
+    `(${escapePdfText(`${worksheet.topic.toUpperCase()}  |  ${worksheet.level}  |  ${worksheet.minutes} min`)}) Tj`,
     'ET',
   ].join('\n');
+
+  // Underline rule under meta
+  const ruleStream = '0.75 0.75 0.75 rg\n50 730 512 1 re\nf';
+
+  // Body content
+  const bodyParts = ['BT', '0 0 0 rg', '/F1 11 Tf', '50 718 Td', '15 TL'];
+  let firstSection = true;
+  for (const line of bodyLines) {
+    const isSection = line === labels.objectives.toUpperCase() || line === labels.tasks.toUpperCase() || line === labels.reflection.toUpperCase();
+    if (isSection) {
+      if (!firstSection) bodyParts.push('T*');
+      bodyParts.push('/F1 13 Tf', `(${escapePdfText(line)}) Tj`, '/F1 11 Tf');
+      firstSection = false;
+    } else {
+      bodyParts.push(`(${escapePdfText(line)}) Tj T*`);
+    }
+  }
+  bodyParts.push('ET');
+
+  // Footer
+  const footerStream = [
+    'BT', '0.6 0.6 0.6 rg', '/F1 8 Tf', '180 30 Td',
+    '(Generated by ZeroLink • zerolink.app) Tj',
+    'ET',
+  ].join('\n');
+
+  const fullStream = [headerStream, parts.join('\n'), metaStream, ruleStream, bodyParts.join('\n'), footerStream].join('\n');
+
   const objects = [
     '1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj',
     '2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj',
     '3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >> endobj',
     '4 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> endobj',
-    `5 0 obj << /Length ${content.length} >> stream\n${content}\nendstream endobj`,
+    `5 0 obj << /Length ${fullStream.length} >> stream\n${fullStream}\nendstream endobj`,
   ];
+
   let pdf = '%PDF-1.4\n';
-  const offsets = [0];
+  const offsets: number[] = [];
   for (const obj of objects) {
     offsets.push(pdf.length);
     pdf += `${obj}\n`;
   }
   const xref = pdf.length;
   pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
-  offsets.slice(1).forEach(offset => { pdf += `${String(offset).padStart(10, '0')} 00000 n \n`; });
+  offsets.forEach(offset => { pdf += `${String(offset).padStart(10, '0')} 00000 n \n`; });
   pdf += `trailer << /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF`;
   return new Blob([pdf], { type: 'application/pdf' });
 }
 
-function downloadWorksheetPdf(worksheet: Worksheet, labels: typeof COPY.en) {
+function downloadWorksheetPdf(worksheet: Worksheet, labels: { objectives: string; tasks: string; reflection: string }) {
   const blob = buildWorksheetPdf(worksheet, labels);
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -126,15 +129,39 @@ function downloadWorksheetPdf(worksheet: Worksheet, labels: typeof COPY.en) {
 export function CourseWorksheetsPage() {
   const { slug } = useParams<{ slug: string }>();
   const { prefs } = usePrefsStore();
-  const labels = COPY[prefs.primaryLanguage] ?? COPY.en;
-  const inferredTopic = TOPICS.some(t => t.key !== 'all' && slug?.includes(t.key)) ? slug?.split('-')[0] : 'all';
+  const labels = COPY[prefs.primaryLanguage] ?? COPY['en']!;
+  const qc = useQueryClient();
+  const [addedId, setAddedId] = useState<string | null>(null);
+
+  const inferredTopic = TOPICS.some(t => t.key !== 'all' && slug === t.key) ? slug : 'all';
   const [topic, setTopic] = useState<string>(inferredTopic ?? 'all');
 
-  const worksheets = useMemo(() => {
-    const slugMatches = slug ? WORKSHEETS.filter(w => w.courseSlug === slug || w.topic === slug || slug.includes(w.topic)) : WORKSHEETS;
-    const base = slugMatches.length ? slugMatches : WORKSHEETS;
-    return topic === 'all' ? base : base.filter(w => w.topic === topic);
-  }, [slug, topic]);
+  // TASK 1 FIX: removed backward `slug.includes(w.topic)` — only exact slug matches
+  const slugMatches = useMemo(
+    () => slug ? WORKSHEETS.filter(w => w.courseSlug === slug || w.topic === slug) : WORKSHEETS,
+    [slug],
+  );
+  const base = slugMatches.length ? slugMatches : WORKSHEETS;
+
+  const worksheets = useMemo(
+    () => topic === 'all' ? base : base.filter(w => w.topic === topic),
+    [base, topic],
+  );
+
+  const addPlanMutation = useMutation({
+    mutationFn: (w: Worksheet) =>
+      api.post('/daily-plan/tasks', {
+        type: 'worksheet',
+        description: { en: w.title },
+        durationMin: w.minutes,
+        worksheetId: w.id,
+      }),
+    onSuccess: (_data, w) => {
+      qc.invalidateQueries({ queryKey: ['dailyPlan'] });
+      setAddedId(w.id);
+      setTimeout(() => setAddedId(null), 2000);
+    },
+  });
 
   return (
     <div className="space-y-6" dir={prefs.primaryLanguage === 'ar' ? 'rtl' : 'ltr'}>
@@ -154,18 +181,27 @@ export function CourseWorksheetsPage() {
           <Filter className="w-5 h-5 text-earth-400" aria-hidden="true" /> Topics
         </h2>
         <div className="flex gap-2 flex-wrap" role="group" aria-label="Worksheet topic filters">
-          {TOPICS.map(t => (
-            <button
-              key={t.key}
-              onClick={() => setTopic(t.key)}
-              className={`px-3 py-1.5 rounded-full text-sm font-semibold transition-colors ${
-                topic === t.key ? 'bg-earth-400 text-white' : 'bg-earth-100 text-earth-600 hover:bg-earth-200'
-              }`}
-              aria-pressed={topic === t.key}
-            >
-              <span aria-hidden="true">{t.icon}</span> {t.label}
-            </button>
-          ))}
+          {TOPICS.map(t => {
+            // TASK 1 FIX: count uses `base` (slug-filtered), not full WORKSHEETS
+            const count = t.key === 'all' ? base.length : base.filter(w => w.topic === t.key).length;
+            return (
+              <button
+                key={t.key}
+                onClick={() => setTopic(t.key)}
+                className={`px-3 py-1.5 rounded-full text-sm font-semibold transition-colors ${
+                  topic === t.key ? 'bg-earth-400 text-white' : 'bg-earth-100 text-earth-600 hover:bg-earth-200'
+                }`}
+                aria-pressed={topic === t.key}
+              >
+                <span aria-hidden="true">{t.icon}</span> {t.label}
+                {count > 0 && (
+                  <span className={`ml-1.5 text-xs px-1.5 py-0.5 rounded-full font-bold ${topic === t.key ? 'bg-white/30' : 'bg-earth-200 text-earth-500'}`}>
+                    {count}
+                  </span>
+                )}
+              </button>
+            );
+          })}
         </div>
       </section>
 
@@ -204,12 +240,27 @@ export function CourseWorksheetsPage() {
                 <p className="bg-earth-50 rounded-xl p-3"><strong>{labels.reflection}:</strong> {worksheet.reflection}</p>
               </div>
             </button>
-            <button
-              className="btn-primary mt-4 text-sm flex items-center justify-center gap-2"
-              onClick={() => downloadWorksheetPdf(worksheet, labels)}
-            >
-              <Download className="w-4 h-4" aria-hidden="true" /> {labels.download}
-            </button>
+            <div className="flex gap-2 mt-4">
+              <button
+                className="btn-primary flex-1 text-sm flex items-center justify-center gap-2"
+                onClick={() => downloadWorksheetPdf(worksheet, labels)}
+              >
+                <Download className="w-4 h-4" aria-hidden="true" /> {labels.download}
+              </button>
+              <button
+                className={`text-sm flex items-center gap-1.5 px-3 py-2 rounded-xl font-semibold transition-colors ${
+                  addedId === worksheet.id
+                    ? 'bg-olive-400 text-white'
+                    : 'bg-earth-100 text-earth-600 hover:bg-earth-200'
+                }`}
+                onClick={() => addPlanMutation.mutate(worksheet)}
+                disabled={addPlanMutation.isPending}
+                title={labels.addPlan}
+              >
+                <PlusCircle className="w-4 h-4" aria-hidden="true" />
+                {addedId === worksheet.id ? labels.added : labels.addPlan}
+              </button>
+            </div>
           </article>
         ))}
         {worksheets.length === 0 && <p className="card text-center text-earth-500 py-12 lg:col-span-2">{labels.empty}</p>}

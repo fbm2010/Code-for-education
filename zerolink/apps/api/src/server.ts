@@ -27,6 +27,7 @@ import { syncRoutes }      from './routes/sync.js';
 import { communityRoutes } from './routes/community.js';
 import { usersRoutes }     from './routes/users.js';
 import { adminRoutes }     from './routes/admin.js';
+import { ollamaRoutes }    from './routes/ollama.js';
 
 import { startBundleWorker } from './jobs/generateBundles.js';
 import { startMediaWorker }  from './jobs/processMedia.js';
@@ -131,6 +132,7 @@ export async function buildApp(opts: { testing?: boolean } = {}): Promise<Fastif
   await fastify.register(communityRoutes, { prefix: '/v1' });
   await fastify.register(usersRoutes,     { prefix: '/v1' });
   await fastify.register(adminRoutes,     { prefix: '/v1/admin' });
+  await fastify.register(ollamaRoutes,    { prefix: '/v1/api' });
 
   return fastify;
 }

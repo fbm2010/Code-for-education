@@ -36,6 +36,7 @@ export function LoginPage() {
   const [searchParams] = useSearchParams();
   const { setUser } = useAuthStore();
   const oauthError = searchParams.get('oauth_error');
+  const verified = searchParams.get('verified');
   const [apiError, setApiError] = useState<string | null>(
     oauthError ? OAUTH_ERROR_MESSAGES[oauthError] ?? 'Google Sign-In failed. Please try again.' : null,
   );
@@ -91,6 +92,16 @@ export function LoginPage() {
             <p className="text-earth-500 mt-1">Continue your expedition</p>
           </div>
 
+          {verified === 'true' && (
+            <div role="status" className="bg-olive-50 text-olive-700 border border-olive-200 rounded-xl px-4 py-3 mb-6 text-sm font-semibold">
+              ✓ Email verified! You can now sign in.
+            </div>
+          )}
+          {verified === 'expired' && (
+            <div role="alert" className="bg-amber-50 text-amber-700 border border-amber-200 rounded-xl px-4 py-3 mb-6 text-sm font-semibold">
+              Verification link expired. Register again or contact support.
+            </div>
+          )}
           {apiError && (
             <div role="alert" className="bg-red-50 text-red-700 border border-red-200 rounded-xl px-4 py-3 mb-6 text-sm font-semibold">
               {apiError}

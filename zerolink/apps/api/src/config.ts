@@ -35,6 +35,15 @@ const schema = z.object({
 
   SENTRY_DSN: z.string().optional(),
 
+  SMTP_HOST: z.string().optional(),
+  SMTP_PORT: z.coerce.number().default(587),
+  SMTP_USER: z.string().optional(),
+  SMTP_PASS: z.string().optional(),
+  SMTP_FROM: z.string().optional(),
+
+  OLLAMA_URL:   z.string().default('localhost:11434'),
+  OLLAMA_MODEL: z.string().default('llama3.2'),
+
   SYNC_ENCRYPTION_KEY: z.string().min(32).default('00000000000000000000000000000000'),
 
   RATE_LIMIT_MAX:             z.coerce.number().default(100),

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { api } from '../../lib/api';
 import { usePrefsStore } from '../../stores/prefsStore';
@@ -59,11 +59,18 @@ function collectAttrTargets(root: HTMLElement) {
   return targets;
 }
 
+function timeout(ms: number): Promise<never> {
+  return new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), ms));
+}
+
 async function translateBatch(texts: string[], targetLang: string, signal: AbortSignal): Promise<string[]> {
   const translated: string[] = [];
   for (let index = 0; index < texts.length; index += 80) {
     const chunk = texts.slice(index, index + 80);
-    const res = await api.post('/translate/batch', { texts: chunk, targetLang, sourceLang: 'en' }, { signal });
+    const res = await Promise.race([
+      api.post('/translate/batch', { texts: chunk, targetLang, sourceLang: 'en' }, { signal }),
+      timeout(1500),
+    ]);
     translated.push(...(res.data.data.texts as string[]));
   }
   return translated;
@@ -73,6 +80,7 @@ export function PageTranslator() {
   const lang = usePrefsStore(state => state.prefs.primaryLanguage);
   const location = useLocation();
   const runId = useRef(0);
+  const [translating, setTranslating] = useState(false);
 
   useEffect(() => {
     document.documentElement.lang = lang;
@@ -120,7 +128,16 @@ export function PageTranslator() {
 
       if (texts.length === 0) return;
 
-      const translated = await translateBatch(texts, lang, controller.signal);
+      setTranslating(true);
+      let translated: string[];
+      try {
+        translated = await translateBatch(texts, lang, controller.signal);
+      } catch {
+        // Timed out or failed — show source text with badge; translation will arrive on next navigation
+        setTranslating(false);
+        return;
+      }
+      setTranslating(false);
       if (currentRun !== runId.current) return;
 
       textNodes.forEach((node, index) => {
@@ -148,6 +165,19 @@ export function PageTranslator() {
       controller.abort();
     };
   }, [lang, location.pathname, location.search]);
+
+  if (translating && lang !== 'en') {
+    return (
+      <div
+        style={{ position: 'fixed', bottom: 16, right: 16, zIndex: 9999 }}
+        className="bg-earth-700 text-white text-xs font-semibold px-3 py-1.5 rounded-full shadow-lg"
+        role="status"
+        aria-live="polite"
+      >
+        translating…
+      </div>
+    );
+  }
 
   return null;
 }

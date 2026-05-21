@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
-import { eq, and, isNull } from 'drizzle-orm';
+import { eq, and, isNull, gt } from 'drizzle-orm';
+import { randomBytes } from 'node:crypto';
 import { hash, verify } from '@node-rs/argon2';
 import { lucia } from '../lib/lucia.js';
 import { db } from '../db/index.js';
@@ -9,6 +10,7 @@ import { authenticate } from '../middleware/authenticate.js';
 import { AppError, Errors } from '../lib/errors.js';
 import { config } from '../config.js';
 import { logger } from '../lib/logger.js';
+import { sendMail } from '../lib/mailer.js';
 
 const argon2Options = {
   memoryCost: 65536,
@@ -120,9 +122,33 @@ function serializeUser(user: typeof users.$inferSelect) {
     avatarUrl: user.avatarUrl,
     role: user.isGuest ? 'guest' : user.role,
     isGuest: user.isGuest,
-    emailVerified: false,
+    emailVerified: user.emailVerified,
     createdAt: user.createdAt.toISOString(),
   };
+}
+
+async function sendVerificationEmail(user: typeof users.$inferSelect): Promise<void> {
+  const token = randomBytes(32).toString('hex');
+  const expiry = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 h
+
+  await db.update(users).set({ verificationToken: token, verificationExpiry: expiry }).where(eq(users.id, user.id));
+
+  const link = `${config.APP_URL}/verify-email?token=${token}`;
+  await sendMail({
+    to: user.email!,
+    subject: 'Verify your ZeroLink email',
+    html: `
+      <div style="font-family:sans-serif;max-width:480px;margin:0 auto">
+        <h2 style="color:#5a3e1b">Welcome to ZeroLink, ${user.displayName ?? 'Explorer'}!</h2>
+        <p>Click the button below to verify your email address. The link expires in 24 hours.</p>
+        <a href="${link}" style="display:inline-block;background:#c08040;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:bold;margin:16px 0">
+          Verify Email →
+        </a>
+        <p style="color:#999;font-size:12px">If you didn't register, ignore this email.</p>
+      </div>
+    `,
+    text: `Verify your ZeroLink email: ${link}`,
+  });
 }
 
 async function exchangeGoogleCode(code: string): Promise<GoogleTokenResponse> {
@@ -293,6 +319,11 @@ export async function authRoutes(fastify: FastifyInstance): Promise<void> {
 
       await createDefaultsForUser(user.id);
 
+      // Send verification email (non-blocking — don't fail registration if email fails)
+      if (user.email) {
+        void sendVerificationEmail(user).catch(err => logger.warn({ err }, 'Failed to send verification email'));
+      }
+
       const session    = await lucia.createSession(user.id, {});
       const cookie     = lucia.createSessionCookie(session.id);
       reply.header('Set-Cookie', cookie.serialize());
@@ -300,6 +331,27 @@ export async function authRoutes(fastify: FastifyInstance): Promise<void> {
       return respond(reply, { user: serializeUser(user) }, 201, req.id);
     },
   );
+
+  // GET /auth/verify-email?token=<token>
+  fastify.get<{ Querystring: { token?: string } }>('/verify-email', async (req, reply) => {
+    const { token } = req.query;
+    if (!token) return reply.redirect(`${config.APP_URL}/login?verified=error`);
+
+    const user = await db.query.users.findFirst({
+      where: and(
+        eq(users.verificationToken, token),
+        gt(users.verificationExpiry, new Date()),
+      ),
+    });
+
+    if (!user) return reply.redirect(`${config.APP_URL}/login?verified=expired`);
+
+    await db.update(users)
+      .set({ emailVerified: true, verificationToken: null, verificationExpiry: null, updatedAt: new Date() })
+      .where(eq(users.id, user.id));
+
+    return reply.redirect(`${config.APP_URL}/login?verified=true`);
+  });
 
   // POST /auth/login
   fastify.post<{ Body: z.infer<typeof LoginBody> }>(

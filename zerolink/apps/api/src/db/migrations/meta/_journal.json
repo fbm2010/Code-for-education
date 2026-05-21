@@ -8,6 +8,20 @@
       "when": 1779165646104,
       "tag": "0000_fearless_black_bolt",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "5",
+      "when": 1779397220874,
+      "tag": "0001_hard_susan_delgado",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1779397512745,
+      "tag": "0002_lethal_sheva_callister",
+      "breakpoints": true
     }
   ]
 }

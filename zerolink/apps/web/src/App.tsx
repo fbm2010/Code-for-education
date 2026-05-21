@@ -19,6 +19,8 @@ const CourseWorksheetsPage = lazy(() => import('./pages/CourseWorksheetsPage').t
 const LessonPage          = lazy(() => import('./pages/LessonPage').then(m => ({ default: m.LessonPage })));
 const QuizPage            = lazy(() => import('./pages/QuizPage').then(m => ({ default: m.QuizPage })));
 const StudyCoachPage      = lazy(() => import('./pages/StudyCoachPage').then(m => ({ default: m.StudyCoachPage })));
+const ContentStudioPage   = lazy(() => import('./pages/ContentStudioPage').then(m => ({ default: m.ContentStudioPage })));
+const ResourcesPage       = lazy(() => import('./pages/ResourcesPage').then(m => ({ default: m.ResourcesPage })));
 const CommunityPage       = lazy(() => import('./pages/CommunityPage').then(m => ({ default: m.CommunityPage })));
 const ProfileSettingsPage = lazy(() => import('./pages/ProfileSettingsPage').then(m => ({ default: m.ProfileSettingsPage })));
 const NotFoundPage        = lazy(() => import('./pages/NotFoundPage').then(m => ({ default: m.NotFoundPage })));
@@ -56,6 +58,8 @@ export function App() {
             <Route path="/courses/:slug" element={<CourseWorksheetsPage />} />
             <Route path="/worksheets" element={<CourseWorksheetsPage />} />
             <Route path="/coach" element={<StudyCoachPage />} />
+            <Route path="/content-studio" element={<ContentStudioPage />} />
+            <Route path="/resources" element={<ResourcesPage />} />
             <Route path="/village" element={<CommunityPage />} />
             <Route path="/profile/settings" element={<ProfileSettingsPage />} />
           </Route>

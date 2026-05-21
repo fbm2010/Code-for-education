@@ -2,7 +2,7 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { eq, and, sql, or } from 'drizzle-orm';
 import { db } from '../db/index.js';
-import { resources, teacherPacks } from '../db/schema.js';
+import { resources, teacherPacks, communityNotebooks } from '../db/schema.js';
 import { authenticate } from '../middleware/authenticate.js';
 import { Errors } from '../lib/errors.js';
 import { presignGet, mediaBucket } from '../lib/minio.js';
@@ -152,4 +152,34 @@ export async function communityRoutes(fastify: FastifyInstance): Promise<void> {
       return respond(reply, pack, 201, req.id);
     },
   );
+
+  // POST /community/notebooks
+  const NotebookBody = z.object({
+    title:   z.string().min(1).max(200),
+    body:    z.string().min(1).max(10_000),
+    subject: z.string().min(1).max(50).default('general'),
+  });
+
+  fastify.post('/notebooks', { preHandler: [authenticate] }, async (req, reply) => {
+    const userId = uid(req);
+    const parsed = NotebookBody.safeParse(req.body);
+    if (!parsed.success) throw Errors.validation(parsed.error.issues[0]?.message ?? 'Invalid input');
+
+    const [notebook] = await db.insert(communityNotebooks).values({
+      userId,
+      title:   parsed.data.title,
+      body:    parsed.data.body,
+      subject: parsed.data.subject,
+    }).returning();
+
+    return respond(reply, notebook, 201, req.id);
+  });
+
+  // GET /community/notebooks
+  fastify.get('/notebooks', { preHandler: [authenticate] }, async (req, reply) => {
+    const notebooks = await db.select().from(communityNotebooks)
+      .orderBy(communityNotebooks.createdAt)
+      .limit(50);
+    return respond(reply, notebooks, 200, req.id);
+  });
 }

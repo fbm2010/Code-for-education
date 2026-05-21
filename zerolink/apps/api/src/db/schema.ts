@@ -8,17 +8,20 @@ import { relations, sql } from 'drizzle-orm';
 // ── Auth ──────────────────────────────────────────────────────
 
 export const users = pgTable('users', {
-  id:           uuid('id').primaryKey().defaultRandom(),
-  username:     text('username').unique(),
-  email:        text('email').unique(),
-  passwordHash: text('password_hash'),
-  displayName:  text('display_name'),
-  avatarUrl:    text('avatar_url'),
-  role:         text('role').default('user').notNull(),
-  isGuest:      boolean('is_guest').default(false).notNull(),
-  createdAt:    timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-  updatedAt:    timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
-  deletedAt:    timestamp('deleted_at', { withTimezone: true }),
+  id:                  uuid('id').primaryKey().defaultRandom(),
+  username:            text('username').unique(),
+  email:               text('email').unique(),
+  passwordHash:        text('password_hash'),
+  displayName:         text('display_name'),
+  avatarUrl:           text('avatar_url'),
+  role:                text('role').default('user').notNull(),
+  isGuest:             boolean('is_guest').default(false).notNull(),
+  emailVerified:       boolean('email_verified').default(false).notNull(),
+  verificationToken:   text('verification_token'),
+  verificationExpiry:  timestamp('verification_expiry', { withTimezone: true }),
+  createdAt:           timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt:           timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  deletedAt:           timestamp('deleted_at', { withTimezone: true }),
 }, t => ({
   emailIdx:    index('users_email_idx').on(t.email),
   usernameIdx: index('users_username_idx').on(t.username),
@@ -328,6 +331,19 @@ export const dailySummaries = pgTable('daily_summaries', {
 }, t => ({
   pk:      primaryKey({ columns: [t.userId, t.date] }),
   dateIdx: index('daily_summaries_date_idx').on(t.date),
+}));
+
+// ── Community notebooks ───────────────────────────────────────
+
+export const communityNotebooks = pgTable('community_notebooks', {
+  id:        uuid('id').primaryKey().defaultRandom(),
+  userId:    uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  title:     text('title').notNull(),
+  body:      text('body').notNull(),
+  subject:   text('subject').notNull().default('general'),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+}, t => ({
+  userIdx: index('community_notebooks_user_idx').on(t.userId),
 }));
 
 // ── Relations ─────────────────────────────────────────────────

@@ -1,17 +1,20 @@
 import { Outlet, NavLink } from 'react-router-dom';
-import { Compass, Map, BookOpen, Users, Settings } from 'lucide-react';
+import { Compass, Map, BookOpen, Users, Settings, Sparkles, Globe } from 'lucide-react';
 import { OfflineBanner } from '../ui/OfflineBanner';
+import { OllamaStatus } from '../ui/OllamaStatus';
 import { useAuthStore } from '../../stores/authStore';
 import { useBandwidth } from '../../lib/connectivity';
 import { useOfflineStore } from '../../stores/offlineStore';
 import { useEffect } from 'react';
 
 const NAV_ITEMS = [
-  { to: '/dashboard', icon: Compass, label: 'Dashboard' },
-  { to: '/map', icon: Map, label: 'Map' },
-  { to: '/coach', icon: BookOpen, label: 'Coach' },
-  { to: '/village', icon: Users, label: 'Village' },
-  { to: '/profile/settings', icon: Settings, label: 'Pack' },
+  { to: '/dashboard',       icon: Compass,   label: 'Dashboard' },
+  { to: '/map',             icon: Map,        label: 'Map' },
+  { to: '/coach',           icon: BookOpen,   label: 'Coach' },
+  { to: '/content-studio',  icon: Sparkles,   label: '✨ Studio' },
+  { to: '/resources',       icon: Globe,      label: 'Resources' },
+  { to: '/village',         icon: Users,      label: 'Village' },
+  { to: '/profile/settings',icon: Settings,   label: 'Pack' },
 ];
 
 export function AppLayout() {
@@ -58,8 +61,8 @@ export function AppLayout() {
             </li>
           ))}
         </ul>
-        <div className="px-6 py-4 border-t border-earth-200">
-          <div className="flex items-center gap-2 mb-2">
+        <div className="px-6 py-4 border-t border-earth-200 space-y-2">
+          <div className="flex items-center gap-2">
             <span
               className={`w-2 h-2 rounded-full ${bandwidth === 'offline' ? 'bg-red-400' : bandwidth === 'low' ? 'bg-amber-400' : 'bg-olive-400'}`}
               aria-hidden="true"
@@ -68,6 +71,7 @@ export function AppLayout() {
               {bandwidth === 'offline' ? 'Offline camp' : bandwidth === 'low' ? 'Low bandwidth' : 'Online'}
             </span>
           </div>
+          <OllamaStatus />
           {user && (
             <button onClick={logout} className="text-xs text-earth-400 hover:text-earth-600">
               Sign out
