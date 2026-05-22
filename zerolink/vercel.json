@@ -1,6 +1,7 @@
 {
-  "buildCommand": "npm run build --workspace=apps/web",
+  "buildCommand": "npm run build --workspace=packages/shared && npm run build --workspace=apps/web",
   "outputDirectory": "apps/web/dist",
   "installCommand": "npm install",
-  "framework": null
+  "framework": null,
+  "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
 }

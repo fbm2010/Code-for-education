@@ -8,7 +8,7 @@ type AuthPayload = {
 
 function normalizeUser(payload: unknown): User | null {
   const data = payload as AuthPayload | (Partial<User> & { isGuest?: boolean }) | null;
-  const raw = data && 'user' in data ? data.user : data;
+  const raw = (data && 'user' in data ? data.user : data) as (Partial<User> & { isGuest?: boolean }) | null | undefined;
   if (!raw?.id) return null;
 
   const isGuest = raw.role === 'guest' || raw.isGuest === true;

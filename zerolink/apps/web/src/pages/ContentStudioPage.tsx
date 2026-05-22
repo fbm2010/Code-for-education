@@ -84,7 +84,7 @@ async function extractPdfText(file: File): Promise<string> {
   for (let i = 1; i <= pdf.numPages; i++) {
     const page = await pdf.getPage(i);
     const content = await page.getTextContent();
-    pages.push(content.items.map((it: { str?: string }) => it.str ?? '').join(' '));
+    pages.push(content.items.map((it) => ('str' in it ? (it as { str: string }).str : '')).join(' '));
   }
   return pages.join('\n\n');
 }
@@ -612,7 +612,7 @@ function FlashcardsTab({ context, initialMode }: { context: string; initialMode?
           )}
           {savedToTrail ? <SavedBadge /> : (
             <button
-              onClick={() => trailMutation.mutate()}
+              onClick={() => trailMutation.mutate(undefined)}
               disabled={trailMutation.isPending}
               className="flex items-center gap-1 text-xs font-semibold text-earth-600 bg-earth-100 hover:bg-earth-200 px-2 py-1 rounded-lg transition-colors"
             >

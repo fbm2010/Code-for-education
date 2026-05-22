@@ -109,11 +109,13 @@ export type StudyStreak = {
 
 export type DailyTask = {
   id: string;
-  type: 'review_sr' | 'retrieval_quiz' | 'new_lesson' | 'interleave';
-  lessonId: string;
+  type: 'review_sr' | 'retrieval_quiz' | 'new_lesson' | 'interleave' | 'worksheet';
+  lessonId?: string;
+  worksheetId?: string;
   description: Record<string, string>;
   durationMin: number;
   completed: boolean;
+  payload?: Record<string, unknown>;
 };
 
 export type DailyPlan = {

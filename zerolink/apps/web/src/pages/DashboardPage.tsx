@@ -50,7 +50,7 @@ export function DashboardPage() {
   const [addedId, setAddedId] = useState<string | null>(null);
 
   const addPlanMutation = useMutation({
-    mutationFn: (w: Worksheet) => api.post('/api/trail/save', { type: 'worksheet', title: w.title?.['en'] ?? 'Worksheet', durationMin: (w.minutes ?? 10), payload: w }),
+    mutationFn: (w: Worksheet) => api.post('/api/trail/save', { type: 'worksheet', title: w.title ?? 'Worksheet', durationMin: (w.minutes ?? 10), payload: w }),
     onSuccess: (_data, w) => {
       qc.invalidateQueries({ queryKey: ['dailyPlan'] });
       setAddedId((w as Worksheet).id);
@@ -79,7 +79,7 @@ export function DashboardPage() {
           <div className="absolute inset-0 bg-black opacity-40" onClick={() => setViewerOpen(false)} />
           <div className="bg-white rounded-xl shadow-lg max-w-3xl w-full mx-4 p-6 z-10 overflow-auto" role="dialog" aria-modal="true">
             <div className="flex items-start justify-between mb-4">
-              <h3 className="font-black text-earth-800 text-lg">{viewerSheet.title?.['en'] ?? 'Worksheet'}</h3>
+              <h3 className="font-black text-earth-800 text-lg">{viewerSheet.title ?? 'Worksheet'}</h3>
               <div className="flex items-center gap-2">
                 <button className="text-sm px-3 py-2 rounded-lg bg-earth-100 hover:bg-earth-200" onClick={() => setViewerOpen(false)}>Close</button>
               </div>
@@ -235,18 +235,14 @@ export function DashboardPage() {
                             navigate('/study-coach?action=retrieval_quiz');
                             break;
                           case 'new_lesson':
-                            // If task contains a lessonId, go directly to that lesson
-                            // @ts-expect-error - may include lessonId in payload
-                            if ((task as any).lessonId) navigate(`/lessons/${(task as any).lessonId}`);
+                            if (task.lessonId) navigate(`/lessons/${task.lessonId}`);
                             else navigate('/lessons');
                             break;
                           case 'worksheet': {
-                            // Try to find a template worksheet by id, otherwise show a minimal viewer from task description
-                            // @ts-expect-error task may have worksheetId
-                            const wid = (task as any).worksheetId;
+                            const wid = task.worksheetId;
                             const found = WORKSHEETS.find(w => w.id === wid);
                             if (found) setViewerSheet(found);
-                            else setViewerSheet({ id: wid ?? `unknown-${Date.now()}`, courseSlug: 'generated', title: { en: task.description['en'] ?? 'Worksheet' }, topic: 'all' as any, objectives: [], tasks: [], reflection: '' } as Worksheet);
+                            else setViewerSheet({ id: wid ?? `unknown-${Date.now()}`, courseSlug: 'generated', title: task.description['en'] ?? 'Worksheet', topic: 'math', level: 'Beginner', minutes: 10, objectives: [], tasks: [], reflection: '' });
                             setViewerOpen(true);
                             break;
                           }
