@@ -1,7 +1,7 @@
 # ZeroLink — Offline-First Multilingual Learning Platform
 
 ZeroLink is a React + Fastify monorepo that delivers an offline-capable, multilingual learning experience. The frontend is a PWA (React 18 + Vite + Dexie), and the backend is a Fastify API backed by PostgreSQL and Redis.
-
+(https://zerolinkapp.vercel.app/) USE THIS LINK
 ---
 
 ## Accessing the App (GitHub Codespaces)
