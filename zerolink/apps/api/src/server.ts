@@ -35,6 +35,7 @@ import { aiRoutes }        from './routes/ai.js';
 import { startBundleWorker } from './jobs/generateBundles.js';
 import { startMediaWorker }  from './jobs/processMedia.js';
 import { registerCronJobs }  from './jobs/scheduledJobs.js';
+import { seedIfEmpty }       from './db/seed.js';
 
 export async function buildApp(opts: { testing?: boolean } = {}): Promise<FastifyInstance> {
   const fastify = Fastify({
@@ -165,6 +166,9 @@ async function runMigrations(): Promise<void> {
 async function main(): Promise<void> {
   try {
     await runMigrations();
+
+    const seeded = await seedIfEmpty();
+    if (seeded) logger.info('Database seeded with initial content');
 
     await connectRedis();
     logger.info('Redis connected');

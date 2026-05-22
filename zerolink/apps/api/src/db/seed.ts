@@ -1,6 +1,7 @@
 /**
  * Comprehensive seed for ZeroLink.
  * Run: npm run db:seed
+ * Also exported as seedIfEmpty() for auto-seeding on first startup.
  */
 import 'dotenv/config';
 import { db } from './index.js';
@@ -20,6 +21,14 @@ function daysFromNow(n: number): string {
   return d.toISOString().split('T')[0]!;
 }
 
+/** Call this at server startup to seed the DB if it has no categories yet. */
+export async function seedIfEmpty(): Promise<boolean> {
+  const existing = await db.select().from(categories).limit(1);
+  if (existing.length > 0) return false;
+  await seed();
+  return true;
+}
+
 async function seed() {
   console.log('🌱 Seeding ZeroLink database…');
 
@@ -36,7 +45,7 @@ async function seed() {
     .returning()
     .onConflictDoNothing();
 
-  if (!mathCat) { console.log('ℹ️  Already seeded — skipping'); process.exit(0); }
+  if (!mathCat) { console.log('ℹ️  Already seeded — skipping'); return; }
 
   // ── Courses (2 per category) ─────────────────────────────────
   const [mathC1, mathC2] = await db.insert(courses).values([
@@ -261,10 +270,15 @@ async function seed() {
   ]).onConflictDoNothing();
 
   console.log('✅ Seed complete — categories:', 5, '| courses:', 10, '| lessons:', allLessons.length);
-  process.exit(0);
 }
 
-seed().catch(err => {
-  console.error('❌ Seed failed:', err);
-  process.exit(1);
-});
+// Only auto-run when executed directly (npm run db:seed)
+const isMain = process.argv[1]?.endsWith('seed.ts') || process.argv[1]?.endsWith('seed.js');
+if (isMain) {
+  seed()
+    .then(() => process.exit(0))
+    .catch(err => {
+      console.error('❌ Seed failed:', err);
+      process.exit(1);
+    });
+}
