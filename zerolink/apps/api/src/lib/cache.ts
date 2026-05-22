@@ -14,7 +14,10 @@ export async function getOrSet<T>(
     }
   }
   const value = await fn();
-  await redis.set(key, JSON.stringify(value), 'EX', ttlSeconds);
+  // Don't cache empty arrays — let the next request retry the DB
+  if (!(Array.isArray(value) && value.length === 0)) {
+    await redis.set(key, JSON.stringify(value), 'EX', ttlSeconds);
+  }
   return value;
 }
 

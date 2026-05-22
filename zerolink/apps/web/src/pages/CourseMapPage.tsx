@@ -29,7 +29,7 @@ function DifficultyBadge({ level }: { level: string }) {
 
 export function CourseMapPage() {
   const navigate = useNavigate();
-  const { data: categories, isLoading } = useCategories();
+  const { data: categories, isLoading, isError } = useCategories();
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
   const [langFilter, setLangFilter] = useState('all');
   const { prefs } = usePrefsStore();
@@ -53,6 +53,14 @@ export function CourseMapPage() {
   ];
 
   if (isLoading) return <LanternLoaderPage />;
+
+  if (isError) return (
+    <div className="flex flex-col items-center justify-center min-h-[50vh] gap-4 text-center">
+      <span style={{ fontSize: 48 }}>⚠️</span>
+      <p className="text-earth-700 font-semibold text-lg">Could not load the map</p>
+      <p className="text-earth-500 text-sm">Check your connection and try refreshing.</p>
+    </div>
+  );
 
   return (
     <div className="space-y-6">
@@ -81,6 +89,11 @@ export function CourseMapPage() {
 
       {/* Territory grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        {categories?.length === 0 && (
+          <p className="col-span-full text-earth-500 text-center py-12">
+            No territories yet — check back soon!
+          </p>
+        )}
         {categories?.map((cat, i) => (
           <button
             key={cat.id}

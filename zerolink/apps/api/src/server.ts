@@ -17,6 +17,7 @@ import { migrate } from 'drizzle-orm/postgres-js/migrator';
 import { config }  from './config.js';
 import { logger }  from './lib/logger.js';
 import { redis, connectRedis } from './lib/redis.js';
+import { invalidatePattern } from './lib/cache.js';
 import { db }      from './db/index.js';
 import { sql }     from 'drizzle-orm';
 import { ensureBuckets } from './lib/minio.js';
@@ -171,6 +172,9 @@ async function main(): Promise<void> {
     if (seeded) logger.info('Database seeded with initial content');
 
     await connectRedis();
+    // Bust stale content cache so newly seeded data is visible immediately
+    await invalidatePattern('cache:categories');
+    await invalidatePattern('cache:courses:*');
     logger.info('Redis connected');
 
     if (config.NODE_ENV !== 'test') {
