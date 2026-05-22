@@ -1,6 +1,6 @@
 import 'dotenv/config';
 import Fastify from 'fastify';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import type { FastifyInstance } from 'fastify';
 import compress    from '@fastify/compress';
 import cors        from '@fastify/cors';
@@ -11,6 +11,9 @@ import swagger     from '@fastify/swagger';
 import swaggerUi   from '@fastify/swagger-ui';
 import { ZodError } from 'zod';
 
+import postgres from 'postgres';
+import { drizzle as drizzleMigrate } from 'drizzle-orm/postgres-js';
+import { migrate } from 'drizzle-orm/postgres-js/migrator';
 import { config }  from './config.js';
 import { logger }  from './lib/logger.js';
 import { redis, connectRedis } from './lib/redis.js';
@@ -137,8 +140,23 @@ export async function buildApp(opts: { testing?: boolean } = {}): Promise<Fastif
   return fastify;
 }
 
+async function runMigrations(): Promise<void> {
+  // Path works for both `src/server.ts` (tsx dev) and `dist/server.js` (prod):
+  // ../  brings us up from src/ or dist/ to apps/api/, then into src/db/migrations/
+  const migrationsFolder = fileURLToPath(new URL('../src/db/migrations', import.meta.url));
+  const client = postgres(config.DATABASE_URL, { max: 1 });
+  try {
+    await migrate(drizzleMigrate(client), { migrationsFolder });
+    logger.info('Database migrations applied');
+  } finally {
+    await client.end();
+  }
+}
+
 async function main(): Promise<void> {
   try {
+    await runMigrations();
+
     await connectRedis();
     logger.info('Redis connected');
 

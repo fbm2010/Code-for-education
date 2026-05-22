@@ -252,28 +252,43 @@ export async function authRoutes(fastify: FastifyInstance): Promise<void> {
       return reply.redirect(loginRedirect('invalid_google_state'));
     }
 
+    let token: Awaited<ReturnType<typeof exchangeGoogleCode>>;
     try {
-      const token = await exchangeGoogleCode(query.data.code);
-      if (!token.access_token) {
-        logger.warn({ error: token.error, description: token.error_description }, 'Google token exchange failed');
-        reply.header('Set-Cookie', clearOauthStateCookie());
-        return reply.redirect(loginRedirect('google_token_failed'));
-      }
+      token = await exchangeGoogleCode(query.data.code);
+    } catch (err) {
+      logger.warn({ err }, 'Google token exchange threw');
+      reply.header('Set-Cookie', clearOauthStateCookie());
+      return reply.redirect(loginRedirect('google_token_failed'));
+    }
 
-      const profile = await fetchGoogleUserInfo(token.access_token);
-      if (!profile.sub) {
-        reply.header('Set-Cookie', clearOauthStateCookie());
-        return reply.redirect(loginRedirect('google_profile_failed'));
-      }
+    if (!token.access_token) {
+      logger.warn({ error: token.error, description: token.error_description }, 'Google token exchange failed');
+      reply.header('Set-Cookie', clearOauthStateCookie());
+      return reply.redirect(loginRedirect('google_token_failed'));
+    }
 
+    let profile: Awaited<ReturnType<typeof fetchGoogleUserInfo>>;
+    try {
+      profile = await fetchGoogleUserInfo(token.access_token);
+    } catch (err) {
+      logger.warn({ err }, 'Google userinfo fetch failed');
+      reply.header('Set-Cookie', clearOauthStateCookie());
+      return reply.redirect(loginRedirect('google_profile_failed'));
+    }
+
+    if (!profile.sub) {
+      reply.header('Set-Cookie', clearOauthStateCookie());
+      return reply.redirect(loginRedirect('google_profile_failed'));
+    }
+
+    try {
       const user = await findOrCreateGoogleUser(profile);
       const session = await lucia.createSession(user.id, {});
       const cookie = lucia.createSessionCookie(session.id);
-
       reply.header('Set-Cookie', [cookie.serialize(), clearOauthStateCookie()]);
       return reply.redirect(new URL('/dashboard', config.APP_URL).toString());
     } catch (err) {
-      logger.warn({ err }, 'Google OAuth callback failed');
+      logger.error({ err }, 'Google OAuth DB/session step failed');
       reply.header('Set-Cookie', clearOauthStateCookie());
       return reply.redirect(loginRedirect('google_signin_failed'));
     }
