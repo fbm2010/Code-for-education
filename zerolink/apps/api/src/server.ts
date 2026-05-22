@@ -117,14 +117,23 @@ export async function buildApp(opts: { testing?: boolean } = {}): Promise<Fastif
 
   // 9. Health check
   fastify.get('/health', async (_req, reply) => {
-    let dbStatus:    'ok' | 'error' = 'ok';
-    let redisStatus: 'ok' | 'error' = 'ok';
+    let dbStatus:     'ok' | 'error' = 'ok';
+    let redisStatus:  'ok' | 'error' = 'ok';
+    let schemaStatus: 'ok' | 'error' = 'ok';
+    let dbError = '';
 
-    try { await db.execute(sql`SELECT 1`); } catch { dbStatus = 'error'; }
+    try { await db.execute(sql`SELECT 1`); } catch (e) { dbStatus = 'error'; dbError = String(e); }
+    try { await db.execute(sql`SELECT email_verified FROM users LIMIT 0`); } catch (e) { schemaStatus = 'error'; dbError = String(e); }
     try { await redis.ping(); }             catch { redisStatus = 'error'; }
 
     const code = dbStatus === 'ok' && redisStatus === 'ok' ? 200 : 503;
-    return reply.code(code).send({ status: 'ok', db: dbStatus, redis: redisStatus });
+    return reply.code(code).send({
+      status: code === 200 ? 'ok' : 'degraded',
+      db: dbStatus,
+      schema: schemaStatus,
+      redis: redisStatus,
+      ...(dbError ? { dbError } : {}),
+    });
   });
 
   // 10. Register route modules
