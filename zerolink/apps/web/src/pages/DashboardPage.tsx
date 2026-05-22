@@ -1,5 +1,10 @@
 import { format } from 'date-fns';
 import { BookOpen, Clock, Star, Flame } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { WORKSHEETS, type Worksheet } from '../lib/worksheets';
+import { buildWorksheetPdf } from './CourseWorksheetsPage';
+import { Download, PlusCircle } from 'lucide-react';
+import { useState } from 'react';
 import { useAuthStore } from '../stores/authStore';
 import { useStreak } from '../hooks/useStreak';
 import { useDailyPlan } from '../hooks/useDailyPlan';
@@ -30,22 +35,35 @@ function getGreeting() {
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
 export function DashboardPage() {
+  const navigate = useNavigate();
   const { user } = useAuthStore();
-  const { data: streak } = useStreak();
-  const { data: plan, isLoading: planLoading } = useDailyPlan();
-  const { data: progress } = useProgress();
-  const { data: srCards } = useSRCards();
+  const { data: streak } = useStreak(30_000);
+  const { data: plan, isLoading: planLoading } = useDailyPlan(30_000);
+  const { data: progress } = useProgress(60_000);
+  const { data: srCards } = useSRCards(60_000);
   const qc = useQueryClient();
 
   const completeMutation = useMutation({
     mutationFn: (taskId: string) => api.post(`/daily-plan/complete/${taskId}`),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['dailyPlan'] }),
   });
+  const [addedId, setAddedId] = useState<string | null>(null);
+
+  const addPlanMutation = useMutation({
+    mutationFn: (w: Worksheet) => api.post('/api/trail/save', { type: 'worksheet', title: w.title?.['en'] ?? 'Worksheet', durationMin: (w.minutes ?? 10), payload: w }),
+    onSuccess: (_data, w) => {
+      qc.invalidateQueries({ queryKey: ['dailyPlan'] });
+      setAddedId((w as Worksheet).id);
+      setTimeout(() => setAddedId(null), 2000);
+    },
+  });
 
   const completedLessons = progress?.filter(p => p.status === 'completed').length ?? 0;
   const dueCards = srCards?.filter(c => new Date(c.nextReview) <= new Date()).length ?? 0;
   const today = new Date();
   const dayOfWeek = today.getDay(); // 0=Sun
+  const [viewerOpen, setViewerOpen] = useState(false);
+  const [viewerSheet, setViewerSheet] = useState<Worksheet | null>(null);
 
   return (
     <div className="space-y-8">
@@ -56,6 +74,63 @@ export function DashboardPage() {
             {getGreeting()}, {user?.displayName?.split(' ')[0] ?? 'Explorer'} 🌅
           </h1>
           <p className="text-earth-500 text-sm mt-1">{format(today, 'EEEE, MMMM d')}</p>
+      {viewerOpen && viewerSheet && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black opacity-40" onClick={() => setViewerOpen(false)} />
+          <div className="bg-white rounded-xl shadow-lg max-w-3xl w-full mx-4 p-6 z-10 overflow-auto" role="dialog" aria-modal="true">
+            <div className="flex items-start justify-between mb-4">
+              <h3 className="font-black text-earth-800 text-lg">{viewerSheet.title?.['en'] ?? 'Worksheet'}</h3>
+              <div className="flex items-center gap-2">
+                <button className="text-sm px-3 py-2 rounded-lg bg-earth-100 hover:bg-earth-200" onClick={() => setViewerOpen(false)}>Close</button>
+              </div>
+            </div>
+            <div className="space-y-3">
+              {viewerSheet.objectives && viewerSheet.objectives.length > 0 && (
+                <div>
+                  <p className="font-bold text-earth-700 text-sm mb-1">Learning Goals</p>
+                  <ul className="list-disc pl-4 text-sm text-earth-600 space-y-0.5">
+                    {viewerSheet.objectives.map((o, i) => <li key={i}>{o}</li>)}
+                  </ul>
+                </div>
+              )}
+              {viewerSheet.tasks && viewerSheet.tasks.length > 0 && (
+                <div>
+                  <p className="font-bold text-earth-700 text-sm mb-1">Practice Trail</p>
+                  <ol className="list-decimal pl-4 text-sm text-earth-600 space-y-0.5">
+                    {viewerSheet.tasks.map((t, i) => <li key={i}>{t}</li>)}
+                  </ol>
+                </div>
+              )}
+              {viewerSheet.reflection && <p className="text-sm text-earth-600 italic">{viewerSheet.reflection}</p>}
+
+              <div className="flex gap-2 mt-4">
+                <button
+                  className="btn-primary text-sm flex-1"
+                  onClick={() => {
+                    try {
+                      const blob = buildWorksheetPdf(viewerSheet, { objectives: 'Learning Goals', tasks: 'Practice Trail', reflection: 'Reflection' });
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement('a'); a.href = url; a.download = `${viewerSheet.id}.pdf`; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+                    } catch {
+                      // fallback: close viewer
+                      setViewerOpen(false);
+                    }
+                  }}
+                >
+                  <Download className="w-4 h-4 mr-1" /> Download PDF
+                </button>
+                <button
+                  className={`btn-secondary text-sm ${addedId === viewerSheet.id ? 'opacity-60' : ''}`}
+                  onClick={() => viewerSheet && addPlanMutation.mutate(viewerSheet)}
+                  disabled={addPlanMutation.isPending || addedId === viewerSheet.id}
+                >
+                  <PlusCircle className="w-4 h-4 mr-1" /> {addedId === viewerSheet.id ? 'Added' : 'Add to Plan'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
         </div>
         {streak && <StreakBadge count={streak.currentStreak} />}
       </div>
@@ -138,14 +213,60 @@ export function DashboardPage() {
                   <p className="text-earth-500 text-sm">{task.durationMin} min</p>
                 </div>
                 {!task.completed && (
-                  <button
-                    className="btn-primary text-sm px-4 py-2 shrink-0"
-                    onClick={() => completeMutation.mutate(task.id)}
-                    disabled={completeMutation.isPending}
-                    aria-label={`Complete task: ${task.description['en']}`}
-                  >
-                    Done ✓
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      className="btn-primary text-sm px-4 py-2 shrink-0"
+                      onClick={() => completeMutation.mutate(task.id)}
+                      disabled={completeMutation.isPending}
+                      aria-label={`Complete task: ${task.description['en']}`}
+                    >
+                      Done ✓
+                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        className="text-sm px-3 py-2 rounded-lg bg-earth-100 hover:bg-earth-200 text-earth-700"
+                        onClick={() => {
+                        // Map task types to the appropriate start action
+                        switch (task.type) {
+                          case 'review_sr':
+                            navigate('/study-coach?action=review_sr');
+                            break;
+                          case 'retrieval_quiz':
+                            navigate('/study-coach?action=retrieval_quiz');
+                            break;
+                          case 'new_lesson':
+                            // If task contains a lessonId, go directly to that lesson
+                            // @ts-expect-error - may include lessonId in payload
+                            if ((task as any).lessonId) navigate(`/lessons/${(task as any).lessonId}`);
+                            else navigate('/lessons');
+                            break;
+                          case 'worksheet': {
+                            // Try to find a template worksheet by id, otherwise show a minimal viewer from task description
+                            // @ts-expect-error task may have worksheetId
+                            const wid = (task as any).worksheetId;
+                            const found = WORKSHEETS.find(w => w.id === wid);
+                            if (found) setViewerSheet(found);
+                            else setViewerSheet({ id: wid ?? `unknown-${Date.now()}`, courseSlug: 'generated', title: { en: task.description['en'] ?? 'Worksheet' }, topic: 'all' as any, objectives: [], tasks: [], reflection: '' } as Worksheet);
+                            setViewerOpen(true);
+                            break;
+                          }
+                          default:
+                            navigate('/study-coach');
+                        }
+                      }}
+                    >
+                      Start →
+                    </button>
+                      {task.payload && (
+                        <button
+                          className="text-sm px-3 py-2 rounded-lg bg-earth-50 hover:bg-earth-100 text-earth-700"
+                          onClick={() => navigate(`/trail/task/${task.id}`)}
+                        >
+                          Open
+                        </button>
+                      )}
+                    </div>
+                  </div>
                 )}
                 {task.completed && (
                   <span className="text-olive-500 text-xl" aria-label="Completed">✓</span>

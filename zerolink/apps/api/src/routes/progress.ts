@@ -38,7 +38,7 @@ const ProgressBody = z.object({
 const SrReviewBody = z.object({ quality: z.number().int().min(0).max(5) });
 
 const SrCardBody = z.object({
-  lesson_id: z.string().uuid(),
+  lesson_id: z.string().uuid().optional(),
   term: z.object({ front: z.string(), back: z.string(), language: z.string() }),
 });
 
@@ -197,7 +197,7 @@ export async function progressRoutes(fastify: FastifyInstance): Promise<void> {
 
       const [card] = await db.insert(srCards).values({
         userId,
-        lessonId:   body.data.lesson_id,
+        lessonId:   body.data.lesson_id ?? null,
         term:       body.data.term,
         nextReview: todayStr(),
       }).returning();
@@ -281,6 +281,22 @@ export async function progressRoutes(fastify: FastifyInstance): Promise<void> {
       return respond(reply, plan ?? { userId, planDate: date, tasks, generatedAt: new Date().toISOString() }, 200, req.id);
     },
   );
+
+  // Compatibility: GET /trail/task/:task_id (same as /v1/api/trail/task/:task_id)
+  fastify.get<{ Params: { task_id: string } }>('/trail/task/:task_id', { preHandler: [authenticate] }, async (req, reply) => {
+    const userId = uid(req);
+    const taskId = req.params.task_id;
+
+    const plans = await db.select().from(dailyPlans).where(eq(dailyPlans.userId, userId));
+    for (const p of plans) {
+      const found = (p.tasks as any[]).find(t => t.id === taskId);
+      if (found) return respond(reply, found, 200, req.id);
+    }
+
+    throw Errors.notFound('Trail task');
+  });
+
+  
 
   // POST /daily-plan/complete/:task_id
   fastify.post<{ Params: { task_id: string } }>(

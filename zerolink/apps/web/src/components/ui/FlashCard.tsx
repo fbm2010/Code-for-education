@@ -1,19 +1,11 @@
 import { useState } from 'react';
+import { Check, X } from 'lucide-react';
 
 interface FlashCardProps {
   front: string;
   back: string;
-  onRate: (quality: 0 | 1 | 2 | 3 | 4 | 5) => void;
+  onRate: (known: boolean) => void;
 }
-
-const RATINGS: { q: 0 | 1 | 2 | 3 | 4 | 5; emoji: string; label: string }[] = [
-  { q: 0, emoji: '😖', label: 'Blackout' },
-  { q: 1, emoji: '😕', label: 'Very hard' },
-  { q: 2, emoji: '😐', label: 'Hard' },
-  { q: 3, emoji: '😊', label: 'Good' },
-  { q: 4, emoji: '😄', label: 'Easy' },
-  { q: 5, emoji: '🤩', label: 'Perfect' },
-];
 
 export function FlashCard({ front, back, onRate }: FlashCardProps) {
   const [flipped, setFlipped] = useState(false);
@@ -36,19 +28,26 @@ export function FlashCard({ front, back, onRate }: FlashCardProps) {
         </div>
         <div className="flip-card-back card flex flex-col items-center justify-center p-8 gap-4">
           <p className="text-earth-900 text-xl font-bold text-center">{back}</p>
-          <p className="text-earth-500 text-sm">How well did you remember?</p>
-          <div className="flex gap-2 flex-wrap justify-center">
-            {RATINGS.map(r => (
-              <button
-                key={r.q}
-                onClick={() => { setFlipped(false); onRate(r.q); }}
-                title={r.label}
-                aria-label={`Rate: ${r.label}`}
-                className="text-2xl hover:scale-110 transition-transform focus-visible:outline focus-visible:outline-2 focus-visible:outline-earth-400 rounded"
-              >
-                {r.emoji}
-              </button>
-            ))}
+          <p className="text-earth-500 text-sm">Did you recall this card correctly?</p>
+          <div className="flex gap-3 flex-wrap justify-center">
+            <button
+              type="button"
+              onClick={() => { setFlipped(false); onRate(true); }}
+              aria-label="Correct — proceed to next card"
+              className="inline-flex items-center justify-center gap-2 px-4 py-3 rounded-2xl bg-olive-600 text-white shadow-sm hover:bg-olive-700 transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-olive-400"
+            >
+              <Check className="w-5 h-5" aria-hidden="true" />
+              <span className="text-sm font-semibold">Correct</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => { setFlipped(false); onRate(false); }}
+              aria-label="Incorrect — try again"
+              className="inline-flex items-center justify-center gap-2 px-4 py-3 rounded-2xl bg-rose-600 text-white shadow-sm hover:bg-rose-700 transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-rose-400"
+            >
+              <X className="w-5 h-5" aria-hidden="true" />
+              <span className="text-sm font-semibold">Incorrect</span>
+            </button>
           </div>
         </div>
       </div>

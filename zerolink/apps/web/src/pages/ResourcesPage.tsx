@@ -1,7 +1,6 @@
-import { useEffect, useState } from 'react';
-import { ExternalLink, Download, Wifi, WifiOff, MapPin, Search } from 'lucide-react';
+import { useState } from 'react';
+import { ExternalLink, Download, Wifi, WifiOff, Search } from 'lucide-react';
 import { RESOURCES, RESOURCE_CATEGORIES, type ResourceCategory } from '../lib/resources';
-import { detectCity, type City } from '../lib/geoLookup';
 
 const FORMAT_ICONS: Record<string, string> = {
   video: '🎥', interactive: '🖱️', printable: '🖨️', audio: '🎧', article: '📰', tool: '🛠️',
@@ -12,17 +11,6 @@ export function ResourcesPage() {
   const [offlineOnly, setOfflineOnly] = useState(false);
   const [freeOnly, setFreeOnly]     = useState(true);
   const [search, setSearch]         = useState('');
-  const [city, setCity]             = useState<City | null>(null);
-  const [locating, setLocating]     = useState(false);
-
-  const handleLocate = async () => {
-    setLocating(true);
-    const c = await detectCity();
-    setCity(c);
-    setLocating(false);
-  };
-
-  useEffect(() => { void handleLocate(); }, []);
 
   const filtered = RESOURCES.filter(r => {
     if (category !== 'all' && r.category !== category) return false;
@@ -41,34 +29,6 @@ export function ResourcesPage() {
       <div>
         <h1 className="text-2xl font-black text-earth-800">Learning Resources</h1>
         <p className="text-earth-500 text-sm mt-1">Curated free and low-bandwidth resources for every learner.</p>
-      </div>
-
-      {/* Location badge */}
-      <div className="flex items-center gap-3">
-        {city ? (
-          <div className="flex items-center gap-1.5 text-xs text-earth-500 bg-earth-50 border border-earth-200 rounded-full px-3 py-1">
-            <MapPin className="w-3 h-3" />
-            <span>{city.name}, {city.country}</span>
-          </div>
-        ) : (
-          <button
-            onClick={handleLocate}
-            disabled={locating}
-            className="flex items-center gap-1.5 text-xs text-earth-500 hover:text-earth-700 bg-earth-50 border border-earth-200 rounded-full px-3 py-1 transition-colors"
-          >
-            <MapPin className="w-3 h-3" />
-            {locating ? 'Locating…' : 'Detect my location'}
-          </button>
-        )}
-        {city && (
-          <button
-            onClick={handleLocate}
-            disabled={locating}
-            className="text-xs text-earth-400 hover:text-earth-600"
-          >
-            {locating ? 'Locating…' : 'Change'}
-          </button>
-        )}
       </div>
 
       {/* Filters */}

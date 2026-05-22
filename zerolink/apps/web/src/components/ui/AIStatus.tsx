@@ -4,12 +4,12 @@ import { Sparkles } from 'lucide-react';
 
 type Status = 'checking' | 'online' | 'offline';
 
-export function OllamaStatus() {
+export function AIStatus() {
   const [status, setStatus] = useState<Status>('checking');
 
   const check = async () => {
     try {
-      const res = await api.get<{ data: { available: boolean } }>('/api/ollama/health');
+      const res = await api.get<{ data: { available: boolean } }>('/api/ai/health');
       setStatus(res.data.data.available ? 'online' : 'offline');
     } catch {
       setStatus('offline');
@@ -18,7 +18,7 @@ export function OllamaStatus() {
 
   useEffect(() => {
     void check();
-    const id = setInterval(check, 30_000);
+    const id = setInterval(check, 60_000);
     return () => clearInterval(id);
   }, []);
 
@@ -26,7 +26,7 @@ export function OllamaStatus() {
 
   return (
     <div
-      title={status === 'online' ? 'Local AI ready' : 'Local AI offline'}
+      title={status === 'online' ? 'Groq AI ready' : 'Groq AI offline'}
       className={`flex items-center gap-1.5 text-xs font-semibold px-2 py-1 rounded-full border ${
         status === 'online'
           ? 'bg-olive-50 text-olive-700 border-olive-200'

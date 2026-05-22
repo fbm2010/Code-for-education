@@ -224,7 +224,7 @@ export const quizAttempts = pgTable('quiz_attempts', {
 export const srCards = pgTable('sr_cards', {
   id:           uuid('id').primaryKey().defaultRandom(),
   userId:       uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
-  lessonId:     uuid('lesson_id').notNull().references(() => lessons.id, { onDelete: 'cascade' }),
+  lessonId:     uuid('lesson_id').references(() => lessons.id, { onDelete: 'cascade' }),
   term:         jsonb('term').notNull().$type<{ front: string; back: string; language: string }>(),
   easeFactor:   doublePrecision('ease_factor').default(2.5).notNull(),
   intervalDays: integer('interval_days').default(1).notNull(),

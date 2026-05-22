@@ -75,7 +75,13 @@ function randomGuestName(): string {
 }
 
 function googleRedirectUri(): string {
-  return `${config.API_URL}/v1/auth/oauth/google/callback`;
+  // In GitHub Codespaces the Codespaces tunnel strips cookies from cross-port
+  // XHR, so the OAuth callback must flow through the frontend Vite proxy
+  // (APP_URL/5174) instead of directly to the API port (API_URL/3000).
+  // We detect Codespaces by the .app.github.dev hostname pattern.
+  const isCodespaces = config.APP_URL.includes('.app.github.dev');
+  const base = isCodespaces ? config.APP_URL : config.API_URL;
+  return `${base}/v1/auth/oauth/google/callback`;
 }
 
 

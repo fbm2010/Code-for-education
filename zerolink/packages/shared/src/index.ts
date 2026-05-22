@@ -92,7 +92,7 @@ export type LessonProgress = {
 
 export type SRCard = {
   id: string;
-  lessonId: string;
+  lessonId: string | null;
   term: { front: string; back: string; language: string };
   easeFactor: number;
   intervalDays: number;

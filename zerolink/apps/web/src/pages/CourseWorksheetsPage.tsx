@@ -150,11 +150,11 @@ export function CourseWorksheetsPage() {
 
   const addPlanMutation = useMutation({
     mutationFn: (w: Worksheet) =>
-      api.post('/daily-plan/tasks', {
+      api.post('/api/trail/save', {
         type: 'worksheet',
-        description: { en: w.title },
+        title: w.title,
         durationMin: w.minutes,
-        worksheetId: w.id,
+        payload: w,
       }),
     onSuccess: (_data, w) => {
       qc.invalidateQueries({ queryKey: ['dailyPlan'] });

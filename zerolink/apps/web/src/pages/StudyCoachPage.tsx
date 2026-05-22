@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect, useRef } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { BookOpen, Zap, Flame, Shuffle, ChevronDown, ChevronUp, Download, PlusCircle } from 'lucide-react';
 import { useDailyPlan } from '../hooks/useDailyPlan';
 import { useSRCards } from '../hooks/useSRCards';
@@ -84,35 +84,53 @@ type GenerateState = { status: 'idle' } | { status: 'loading' } | { status: 'don
 
 export function StudyCoachPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const action = searchParams.get('action');
   const { data: plan, isLoading: planLoading } = useDailyPlan();
   const { data: srCards, isLoading: cardsLoading } = useSRCards();
   const { data: streak } = useStreak();
   const qc = useQueryClient();
   const [reviewMode, setReviewMode] = useState(false);
+  const quizRef = useRef<HTMLElement | null>(null);
   const [cardIndex, setCardIndex] = useState(0);
   const [reviewDone, setReviewDone] = useState(false);
+  const [needsRetry, setNeedsRetry] = useState(false);
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
   const [worksheetTopic, setWorksheetTopic] = useState<TopicKey>('all');
   const [addedId, setAddedId] = useState<string | null>(null);
 
-  // Ollama generator state
+  // AI worksheet generator state
   const [genTopic, setGenTopic] = useState('math');
   const [genLevel, setGenLevel] = useState<'Beginner' | 'Intermediate' | 'Advanced'>('Beginner');
   const [genFocus, setGenFocus] = useState('');
   const [genState, setGenState] = useState<GenerateState>({ status: 'idle' });
   const [showGenerator, setShowGenerator] = useState(false);
 
-  const { data: ollamaStatus } = useQuery({
-    queryKey: ['ollamaHealth'],
-    queryFn: () => api.get('/api/ollama/health').then(r => r.data.data as { available: boolean }),
-    staleTime: 30_000,
+  const { data: aiStatus } = useQuery({
+    queryKey: ['aiHealth'],
+    queryFn: () => api.get('/api/ai/health').then(r => r.data.data as { available: boolean }),
+    staleTime: 60_000,
   });
 
   const due = srCards?.filter(c => new Date(c.nextReview) <= new Date()) ?? [];
   const current: SRCard | undefined = due[cardIndex];
 
+  // Auto-start or scroll when arriving from a trail task link
+  useEffect(() => {
+    if (!action) return;
+    if (action === 'review_sr' && due.length > 0) {
+      setReviewMode(true);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+    if (action === 'retrieval_quiz' && quizRef.current) {
+      quizRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  // Run once after cards load
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [action, srCards]);
+
   const rateMutation = useMutation({
-    mutationFn: async ({ card, quality }: { card: SRCard; quality: 0 | 1 | 2 | 3 | 4 | 5 }) => {
+    mutationFn: async ({ card, quality }: { card: SRCard; quality: 0 | 1 | 4 | 5 }) => {
       const result = sm2(quality, card.easeFactor, card.intervalDays, card.repetitions);
       const nextReview = new Date();
       nextReview.setDate(nextReview.getDate() + result.intervalDays);
@@ -124,8 +142,18 @@ export function StudyCoachPage() {
       qc.invalidateQueries({ queryKey: ['srCards'] });
       if (cardIndex + 1 >= due.length) setReviewDone(true);
       else setCardIndex(i => i + 1);
+      setNeedsRetry(false);
     },
   });
+
+  const handleReviewAnswer = (correct: boolean) => {
+    if (!current) return;
+    if (!correct) {
+      setNeedsRetry(true);
+      return;
+    }
+    rateMutation.mutate({ card: current, quality: needsRetry ? 1 : 4 });
+  };
 
   const completeMutation = useMutation({
     mutationFn: (taskId: string) => api.post(`/daily-plan/complete/${taskId}`),
@@ -134,7 +162,7 @@ export function StudyCoachPage() {
 
   const addPlanMutation = useMutation({
     mutationFn: (w: Worksheet) =>
-      api.post('/daily-plan/tasks', { type: 'worksheet', description: { en: w.title }, durationMin: w.minutes, worksheetId: w.id }),
+      api.post('/api/trail/save', { type: 'worksheet', title: w.title, durationMin: w.minutes, payload: w }),
     onSuccess: (_data, w) => {
       qc.invalidateQueries({ queryKey: ['dailyPlan'] });
       setAddedId(w.id);
@@ -148,7 +176,7 @@ export function StudyCoachPage() {
       const res = await api.post('/api/worksheets/generate', { topic: genTopic, level: genLevel, focus: genFocus || undefined });
       const data = res.data.data;
       if ('error' in data) {
-        setGenState({ status: 'error', message: 'Ollama is offline. Try enabling it or use a static worksheet below.' });
+        setGenState({ status: 'error', message: 'AI generation failed. Please try again in a moment.' });
         return;
       }
       setGenState({ status: 'done', worksheet: { ...data, id: `gen-${Date.now()}`, courseSlug: 'generated', topic: genTopic as Worksheet['topic'] } });
@@ -179,7 +207,7 @@ export function StudyCoachPage() {
             {due.length > 0 && <span className="ml-2 text-sm bg-sky-100 text-sky-700 font-bold px-2 py-0.5 rounded-full">{due.length} due</span>}
           </h2>
           {!reviewMode && due.length > 0 && (
-            <button className="btn-primary text-sm" onClick={() => { setReviewMode(true); setCardIndex(0); setReviewDone(false); }}>
+            <button className="btn-primary text-sm" onClick={() => { setReviewMode(true); setCardIndex(0); setReviewDone(false); setNeedsRetry(false); }}>
               Start Review
             </button>
           )}
@@ -202,7 +230,14 @@ export function StudyCoachPage() {
             <button className="btn-secondary mt-4" onClick={() => setReviewMode(false)}>Close</button>
           </div>
         ) : current ? (
-          <FlashCard front={current.term.front} back={current.term.back} onRate={q => rateMutation.mutate({ card: current, quality: q })} />
+          <div className="space-y-3">
+            <FlashCard key={cardIndex} front={current.term.front} back={current.term.back} onRate={handleReviewAnswer} />
+            {needsRetry && (
+              <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+                Not quite — review the card again and try once more.
+              </div>
+            )}
+          </div>
         ) : null}
       </section>
 
@@ -285,7 +320,7 @@ export function StudyCoachPage() {
       </section>
 
       {/* Practice Worksheets section */}
-      <section aria-labelledby="worksheets-coach-title">
+      <section aria-labelledby="worksheets-coach-title" ref={el => { quizRef.current = el; }}>
         <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
           <h2 className="text-xl font-black text-earth-800" id="worksheets-coach-title">📝 Practice Worksheets</h2>
           <button className="text-sm font-semibold text-earth-500 hover:text-earth-700" onClick={() => navigate('/worksheets')}>
@@ -339,7 +374,7 @@ export function StudyCoachPage() {
         </div>
       </section>
 
-      {/* Ollama worksheet generator */}
+      {/* AI worksheet generator */}
       <section aria-labelledby="gen-title">
         <button
           className="w-full text-left card flex items-center justify-between"
@@ -348,8 +383,8 @@ export function StudyCoachPage() {
           id="gen-title"
         >
           <span className="font-black text-earth-800">✨ Generate a Worksheet</span>
-          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${ollamaStatus?.available ? 'bg-olive-100 text-olive-700' : 'bg-amber-100 text-amber-700'}`}>
-            {ollamaStatus?.available ? 'AI Ready' : 'AI Offline'}
+          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${aiStatus?.available ? 'bg-olive-100 text-olive-700' : 'bg-amber-100 text-amber-700'}`}>
+            {aiStatus?.available ? 'AI Ready' : 'AI Offline'}
           </span>
         </button>
 

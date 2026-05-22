@@ -3,9 +3,10 @@ import { api } from '../lib/api';
 import { db } from '../lib/db';
 import type { SRCard } from '@zerolink/shared';
 
-export function useSRCards() {
+export function useSRCards(refetchInterval?: number) {
   return useQuery<SRCard[]>({
     queryKey: ['srCards'],
+    refetchInterval,
     queryFn: async () => {
       const cached = await db.srCards.toArray();
       if (!navigator.onLine && cached.length > 0) return cached;

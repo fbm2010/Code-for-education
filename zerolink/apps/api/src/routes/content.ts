@@ -15,7 +15,7 @@ import { redis } from '../lib/redis.js';
 import { presignGet, bundleBucket } from '../lib/minio.js';
 import { minio } from '../lib/minio.js';
 import { config } from '../config.js';
-import { translateText, translateTexts } from '../services/translationService.js';
+import { translateText, translateTextsDirect } from '../services/translationService.js';
 
 function respond<T>(reply: FastifyReply, data: T, status = 200, reqId: string) {
   return reply.code(status).send({ data, meta: { request_id: reqId, timestamp: new Date().toISOString() } });
@@ -100,10 +100,10 @@ export async function contentRoutes(fastify: FastifyInstance): Promise<void> {
     return respond(reply, { text: translatedText }, 200, req.id);
   });
 
-  // POST /translate/batch — translates visible page text in a single request
+  // POST /translate/batch — translates visible page text in a single request (awaited, real translations)
   fastify.post<{ Body: z.infer<typeof TranslateBatchBody> }>('/translate/batch', async (req, reply) => {
     const body = TranslateBatchBody.parse(req.body);
-    const translated = await translateTexts(body.texts, body.targetLang, body.sourceLang, body.format);
+    const translated = await translateTextsDirect(body.texts, body.targetLang, body.sourceLang, body.format);
     return respond(reply, { texts: translated }, 200, req.id);
   });
 

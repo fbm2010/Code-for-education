@@ -4,7 +4,7 @@ import { logger } from '../lib/logger.js';
 import { redis } from '../lib/redis.js';
 import { translationQueue } from '../lib/queues.js';
 
-export const SUPPORTED_LANGUAGES = ['en', 'sw', 'fr', 'ar', 'hi', 'es', 'pt', 'ha'] as const;
+export const SUPPORTED_LANGUAGES = ['en', 'fr', 'hi', 'es'] as const;
 export type SupportedLanguage = (typeof SUPPORTED_LANGUAGES)[number];
 
 const LOKALISE_LANGUAGE_ALIASES: Record<string, string> = { sw: 'sw_KE' };
@@ -174,6 +174,13 @@ export async function translateTexts(
   texts: string[], targetLang: string, sourceLang = 'en', format: 'text' | 'html' = 'text',
 ): Promise<string[]> {
   return Promise.all(texts.map(text => translateText(text, targetLang, sourceLang, format)));
+}
+
+// Awaited batch translation — used by the /translate/batch UI route so the response contains real translations
+export async function translateTextsDirect(
+  texts: string[], targetLang: string, sourceLang = 'en', format: 'text' | 'html' = 'text',
+): Promise<string[]> {
+  return Promise.all(texts.map(text => translateTextDirect(text, targetLang, sourceLang, format)));
 }
 
 export async function translateToAllLanguages(englishText: string): Promise<Record<SupportedLanguage, string>> {

@@ -4,10 +4,10 @@ import { usePrefsStore } from '../stores/prefsStore';
 import { api } from '../lib/api';
 
 const LANGS = [
-  { code: 'en', label: 'English' }, { code: 'sw', label: 'Kiswahili' },
-  { code: 'fr', label: 'Français' }, { code: 'ar', label: 'العربية' },
-  { code: 'hi', label: 'हिन्दी' }, { code: 'es', label: 'Español' }, { code: 'pt', label: 'Português' },
-  { code: 'ha', label: 'Hausa' }, { code: 'am', label: 'አማርኛ' },
+  { code: 'en', label: 'English' },
+  { code: 'fr', label: 'Français' },
+  { code: 'hi', label: 'हिन्दी' },
+  { code: 'es', label: 'Español' },
 ];
 
 function Toggle({ checked, onChange, id }: { checked: boolean; onChange: (v: boolean) => void; id: string }) {

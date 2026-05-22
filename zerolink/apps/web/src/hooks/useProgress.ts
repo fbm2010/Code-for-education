@@ -3,9 +3,10 @@ import { api } from '../lib/api';
 import { db } from '../lib/db';
 import type { LessonProgress } from '@zerolink/shared';
 
-export function useProgress() {
+export function useProgress(refetchInterval?: number) {
   return useQuery<LessonProgress[]>({
     queryKey: ['progress'],
+    refetchInterval,
     queryFn: async () => {
       const cached = await db.progress.toArray();
       if (!navigator.onLine && cached.length > 0) return cached;

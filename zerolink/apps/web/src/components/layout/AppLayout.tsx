@@ -1,11 +1,13 @@
 import { Outlet, NavLink } from 'react-router-dom';
-import { Compass, Map, BookOpen, Users, Settings, Sparkles, Globe } from 'lucide-react';
+import { Compass, Map, BookOpen, Settings, Sparkles, Globe, BookMarked, X } from 'lucide-react';
 import { OfflineBanner } from '../ui/OfflineBanner';
-import { OllamaStatus } from '../ui/OllamaStatus';
+import { AIStatus } from '../ui/AIStatus';
 import { useAuthStore } from '../../stores/authStore';
 import { useBandwidth } from '../../lib/connectivity';
 import { useOfflineStore } from '../../stores/offlineStore';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { api } from '../../lib/api';
 
 const NAV_ITEMS = [
   { to: '/dashboard',       icon: Compass,   label: 'Dashboard' },
@@ -13,14 +15,78 @@ const NAV_ITEMS = [
   { to: '/coach',           icon: BookOpen,   label: 'Coach' },
   { to: '/content-studio',  icon: Sparkles,   label: '✨ Studio' },
   { to: '/resources',       icon: Globe,      label: 'Resources' },
-  { to: '/village',         icon: Users,      label: 'Village' },
   { to: '/profile/settings',icon: Settings,   label: 'Pack' },
 ];
+
+type CommunityNote = {
+  id: string;
+  title: string;
+  body: string;
+  subject: string;
+  createdAt: string;
+};
+
+function CommunityPanel({ onClose }: { onClose: () => void }) {
+  const { data: notes, isLoading } = useQuery<CommunityNote[]>({
+    queryKey: ['communityPublished'],
+    queryFn: async () => {
+      const res = await api.get('/api/community/published');
+      return res.data.data;
+    },
+    refetchInterval: 60_000,
+  });
+
+  return (
+    <div className="fixed inset-0 z-50 flex" role="dialog" aria-modal="true" aria-label="Community Notes">
+      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
+      <div className="relative ml-auto w-full max-w-md bg-parchment h-full flex flex-col shadow-2xl overflow-hidden">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-earth-200">
+          <div className="flex items-center gap-2">
+            <BookMarked className="w-5 h-5 text-earth-500" aria-hidden="true" />
+            <h2 className="font-black text-earth-800">Community Notes</h2>
+          </div>
+          <button onClick={onClose} className="p-1 rounded-lg hover:bg-earth-100" aria-label="Close">
+            <X className="w-5 h-5 text-earth-500" />
+          </button>
+        </div>
+        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+          {isLoading && (
+            <div className="space-y-3">
+              {[1, 2, 3].map(i => (
+                <div key={i} className="h-24 bg-earth-100 rounded-2xl animate-pulse" />
+              ))}
+            </div>
+          )}
+          {!isLoading && (!notes || notes.length === 0) && (
+            <div className="text-center py-16">
+              <div className="text-4xl mb-3">📚</div>
+              <p className="font-semibold text-earth-600">No community notes yet</p>
+              <p className="text-earth-400 text-sm mt-1">Publish from Content Studio to share here.</p>
+            </div>
+          )}
+          {notes?.map(note => (
+            <div key={note.id} className="card space-y-2">
+              <div className="flex items-start justify-between gap-2">
+                <h3 className="font-bold text-earth-800 leading-tight">{note.title}</h3>
+                <span className="text-xs bg-olive-100 text-olive-700 px-2 py-0.5 rounded-full shrink-0 font-medium">
+                  {note.subject}
+                </span>
+              </div>
+              <p className="text-earth-600 text-sm line-clamp-4 whitespace-pre-line">{note.body}</p>
+              <p className="text-earth-400 text-xs">{new Date(note.createdAt).toLocaleDateString()}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export function AppLayout() {
   const { user, logout } = useAuthStore();
   const bandwidth = useBandwidth();
   const { setOffline, setBandwidthMode } = useOfflineStore();
+  const [communityOpen, setCommunityOpen] = useState(false);
 
   useEffect(() => {
     setOffline(bandwidth === 'offline');
@@ -61,6 +127,16 @@ export function AppLayout() {
             </li>
           ))}
         </ul>
+        <div className="px-3 py-2">
+          <button
+            onClick={() => setCommunityOpen(true)}
+            className="flex items-center gap-3 w-full px-3 py-2.5 rounded-xl font-semibold text-sm text-earth-600 hover:bg-earth-100 transition-colors"
+            aria-label="Browse community notes"
+          >
+            <BookMarked className="w-5 h-5 shrink-0" aria-hidden="true" />
+            Community Notes
+          </button>
+        </div>
         <div className="px-6 py-4 border-t border-earth-200 space-y-2">
           <div className="flex items-center gap-2">
             <span
@@ -71,7 +147,7 @@ export function AppLayout() {
               {bandwidth === 'offline' ? 'Offline camp' : bandwidth === 'low' ? 'Low bandwidth' : 'Online'}
             </span>
           </div>
-          <OllamaStatus />
+          <AIStatus />
           {user && (
             <button onClick={logout} className="text-xs text-earth-400 hover:text-earth-600">
               Sign out
@@ -116,6 +192,7 @@ export function AppLayout() {
       </nav>
 
       <OfflineBanner />
+      {communityOpen && <CommunityPanel onClose={() => setCommunityOpen(false)} />}
     </div>
   );
 }

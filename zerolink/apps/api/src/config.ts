@@ -41,8 +41,8 @@ const schema = z.object({
   SMTP_PASS: z.string().optional(),
   SMTP_FROM: z.string().optional(),
 
-  OLLAMA_URL:   z.string().default('localhost:11434'),
-  OLLAMA_MODEL: z.string().default('llama3.2'),
+  GROQ_API_KEY: z.string().min(1),
+  GROQ_MODEL:   z.string().default('llama-3.3-70b-versatile'),
 
   SYNC_ENCRYPTION_KEY: z.string().min(32).default('00000000000000000000000000000000'),
 

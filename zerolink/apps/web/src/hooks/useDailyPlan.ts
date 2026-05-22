@@ -4,9 +4,10 @@ import { db } from '../lib/db';
 import type { DailyPlan } from '@zerolink/shared';
 import { format } from 'date-fns';
 
-export function useDailyPlan() {
+export function useDailyPlan(refetchInterval?: number) {
   return useQuery<DailyPlan>({
     queryKey: ['dailyPlan'],
+    refetchInterval,
     queryFn: async () => {
       const today = format(new Date(), 'yyyy-MM-dd');
       const cached = await db.dailyPlan.get(today);

@@ -1,4 +1,4 @@
-export type OllamaError = { error: 'ollama_unavailable'; fallback: true };
+export type AIError = { error: 'ai_unavailable'; fallback: true };
 
 export type Worksheet = {
   title: string;

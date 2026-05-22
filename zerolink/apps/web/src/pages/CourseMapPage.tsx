@@ -99,7 +99,7 @@ export function CourseMapPage() {
               {cat.name[prefs.primaryLanguage] ?? cat.name['en'] ?? cat.slug}
             </h2>
             <p className="text-earth-500 text-sm mt-1">
-              {cat.lessonCount ?? 0} lessons
+              {((cat as Category & { lesson_count?: number }).lesson_count ?? cat.lessonCount ?? 0)} courses
             </p>
           </button>
         ))}
