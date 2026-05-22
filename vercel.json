@@ -1,9 +1,0 @@
-{
-  "version": 2,
-  "builds": [
-    { "src": "zerolink/apps/web/package.json", "use": "@vercel/static-build", "config": { "distDir": "dist" } }
-  ],
-  "routes": [
-    { "src": "/(.*)", "dest": "/zerolink/apps/web/dist/$1" }
-  ]
-}
