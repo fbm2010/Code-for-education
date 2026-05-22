@@ -107,7 +107,8 @@ export async function aiRoutes(fastify: FastifyInstance): Promise<void> {
       })),
     ).returning();
 
-    return respond(reply, { cards: inserted, saved: true }, 201);
+    const normalizedCards = inserted.map(c => ({ front: c.term.front, back: c.term.back }));
+    return respond(reply, { cards: normalizedCards, saved: true }, 201);
   });
 
   // POST /api/quiz/generate
